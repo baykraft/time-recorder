@@ -1,15 +1,20 @@
-from unittest import TestCase
-from plugins import dateutils
 import datetime
+from unittest import TestCase
+
+from pytz import timezone
+
+from plugins import dateutils
 
 
 class TestDateUtils(TestCase):
 
     def test_parse_date(self):
-        expected_tomorrow = (datetime.datetime.today() + datetime.timedelta(days=1)).date()
-        expected_today = datetime.datetime.today().date()
-        expected_yesterday = (datetime.datetime.today() - datetime.timedelta(days=1)).date()
-        expected_year = datetime.datetime.today().year
+        now = datetime.datetime.now(timezone('Asia/Tokyo'))
+        days_one = datetime.timedelta(days=1)
+        expected_tomorrow = (now + days_one).date()
+        expected_today = now.date()
+        expected_yesterday = (now - days_one).date()
+        expected_year = now.year
         self.assertEqual(expected_tomorrow, dateutils.parse_date('明日'))
         self.assertEqual(expected_today, dateutils.parse_date('今日'))
         self.assertEqual(expected_yesterday, dateutils.parse_date('昨日'))
@@ -33,9 +38,10 @@ class TestDateUtils(TestCase):
         self.assertEqual(datetime.time(12, 0), dateutils.parse_time('12:60'))
 
     def test_normalize_datetime(self):
-        expected_year = datetime.datetime.today().year
-        expected_hour = datetime.datetime.now().hour
-        expected_minute = datetime.datetime.now().minute
+        now = datetime.datetime.now(timezone('Asia/Tokyo'))
+        expected_year = now.year
+        expected_hour = now.hour
+        expected_minute = now.minute
         self.assertEqual(datetime.datetime(2020, 10, 20, 12, 30), dateutils.normalize_datetime('2020/10/20 12:30'))
         self.assertEqual(datetime.datetime(expected_year, 10, 20, 12, 30), dateutils.normalize_datetime('10/20 12:30'))
         self.assertEqual(datetime.datetime(2020, 10, 20, expected_hour, expected_minute),

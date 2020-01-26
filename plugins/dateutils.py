@@ -1,4 +1,5 @@
 import datetime
+from pytz import timezone
 import re
 
 ZEN = "".join(chr(0xff01 + i) for i in range(94))
@@ -19,19 +20,20 @@ def parse_date(value: str) -> datetime.date:
     # 全角英数字記号を半角英数字記号に変換
     value = value.translate(ZEN2HAN)
     days_one = datetime.timedelta(days=1)
+    now = datetime.datetime.now(timezone('Asia/Tokyo'))
     if re.search('(明日|tomorrow)', value):
-        return (datetime.datetime.now() + days_one).date()
+        return (now + days_one).date()
     if re.search('(今日|today)', value):
-        return (datetime.datetime.now()).date()
+        return now.date()
     if re.search('(昨日|yesterday)', value):
-        return (datetime.datetime.now() - days_one).date()
+        return (now - days_one).date()
 
     # 日付が直接指定された場合はその日付を返却
     pattern = re.compile(r'((\d{4})[-/年]|)(\d{1,2})[-/月](\d{1,2})')
     matches = pattern.search(value)
     if matches:
         groups = matches.group(2, 3, 4)
-        year = int(datetime.datetime.today().year if (groups[0] is None) else groups[0])
+        year = int(now.year if (groups[0] is None) else groups[0])
         month = int(groups[1])
         day = int(groups[2])
         return datetime.date(year=year, month=month, day=day)
@@ -93,7 +95,8 @@ def normalize_datetime(message: str) -> datetime.datetime:
     :return: 日時
     :rtype: datetime.datetime
     """
-    date = parse_date(message) or datetime.datetime.now().date()
-    time = parse_time(message) or datetime.datetime.now().time()
+    now = datetime.datetime.now(timezone('Asia/Tokyo'))
+    date = parse_date(message) or now.date()
+    time = parse_time(message) or now.time()
     time = time.replace(second=0, microsecond=0)
     return datetime.datetime.combine(date, time)
