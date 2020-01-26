@@ -34,5 +34,9 @@ class TestDateUtils(TestCase):
 
     def test_normalize_datetime(self):
         expected_year = datetime.datetime.today().year
+        expected_hour = datetime.datetime.now().hour
+        expected_minute = datetime.datetime.now().minute
         self.assertEqual(datetime.datetime(2020, 10, 20, 12, 30), dateutils.normalize_datetime('2020/10/20 12:30'))
         self.assertEqual(datetime.datetime(expected_year, 10, 20, 12, 30), dateutils.normalize_datetime('10/20 12:30'))
+        self.assertEqual(datetime.datetime(2020, 10, 20, expected_hour, expected_minute),
+                         dateutils.normalize_datetime('2020/10/20'))

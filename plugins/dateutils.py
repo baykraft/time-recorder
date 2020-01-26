@@ -94,5 +94,6 @@ def normalize_datetime(message: str) -> datetime.datetime:
     :rtype: datetime.datetime
     """
     date = parse_date(message) or datetime.datetime.now().date()
-    time = parse_time(message) or datetime.time(0, 0)
+    time = parse_time(message) or datetime.datetime.now().time()
+    time = time.replace(second=0, microsecond=0)
     return datetime.datetime.combine(date, time)
