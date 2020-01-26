@@ -1,0 +1,18 @@
+== Baykraft 勤怠記録アプリ
+
+=== 環境構築
+
+1. https://baykraft.slack.com にアクセス
+2. 左側メニューの「アプリを追加する」を選択
+3. 検索欄に「Hubot」と入力
+4. Hubotをインストール
+
+=== Herokuへの環境変数設定
+
+[source,sh]
+----
+heroku config:set BOT_API_TOKEN="hubotのaccess_token"
+heroku config:set WEB_API_CLIENT_ID="slackに追加したアプリのClient ID"
+heroku config:set WEB_API_CLIENT_SECRET="slackに追加したアプリのClient ID"
+heroku config:set WEB_API_REDIRECT="slack-oauth2で認可した後の遷移先URI"
+----
