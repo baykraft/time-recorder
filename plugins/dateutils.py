@@ -1,11 +1,7 @@
 import datetime
 from pytz import timezone
+from plugins import stringutils
 import re
-
-ZEN = "".join(chr(0xff01 + i) for i in range(94))
-HAN = "".join(chr(0x21 + i) for i in range(94))
-
-ZEN2HAN = str.maketrans(ZEN, HAN)
 
 
 def parse_date(value: str) -> datetime.date:
@@ -18,7 +14,7 @@ def parse_date(value: str) -> datetime.date:
     :rtype: datetime.date
     """
     # 全角英数字記号を半角英数字記号に変換
-    value = value.translate(ZEN2HAN)
+    value = stringutils.translate2han(value)
     days_one = datetime.timedelta(days=1)
     now = datetime.datetime.now(timezone('Asia/Tokyo'))
     if re.search('(明日|tomorrow)', value):
@@ -49,7 +45,7 @@ def parse_time(value: str):
     :rtype: datetime.time
     """
     # 全角英数字記号を半角英数字記号に変換
-    value = value.translate(ZEN2HAN)
+    value = stringutils.translate2han(value)
     pattern = re.compile(r'((\d{1,2})\s*[:時]\s*(\d{1,2})\s*(pm|)|'
                          r'(am|pm|午前|午後)\s*(\d{1,2})(\s*[:時]\s*(\d{1,2})|)|'
                          r'(\d{1,2})(\s*[:時]\s*(\d{1,2})|)(am|pm)|'
