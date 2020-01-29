@@ -12,7 +12,11 @@
 [source,sh]
 ----
 heroku config:set BOT_API_TOKEN="hubotのaccess_token"
-heroku config:set WEB_API_CLIENT_ID="slackに追加したアプリのClient ID"
-heroku config:set WEB_API_CLIENT_SECRET="slackに追加したアプリのClient ID"
-heroku config:set WEB_API_REDIRECT="slack-oauth2で認可した後の遷移先URI"
+----
+
+=== Heroku上のPostgreSQLへのアクセス
+
+[source,sh]
+----
+heroku pg:psql
 ----
