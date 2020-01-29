@@ -20,3 +20,8 @@ heroku config:set BOT_API_TOKEN="hubotのaccess_token"
 ----
 heroku pg:psql
 ----
+
+=== Viewモジュールのコピー
+
+time-recorder-viewリポジトリをビルドし、生成されたbuildフォルダをtemplatesフォルダとして
+time-recorderへコピーする。
