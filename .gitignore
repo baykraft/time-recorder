@@ -133,3 +133,4 @@ dmypy.json
 # Application
 .idea/
 time-recorder.iml
+.DS_Store
