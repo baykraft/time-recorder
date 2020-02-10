@@ -53,7 +53,9 @@ def sign_in(message, *something):
     if filtered:
         filtered.start_time = time
     else:
-        session.add(Timesheet(user, date, time, None, None))
+        timesheet: Timesheet = Timesheet(user, date)
+        timesheet.start_time = time
+        session.add(timesheet)
     session.commit()
     session.close()
 
@@ -124,7 +126,9 @@ def sign_out(message, *something):
     if filtered:
         filtered.end_time = time
     else:
-        session.add(Timesheet(user, date, None, time, None))
+        timesheet: Timesheet = Timesheet(user, date)
+        timesheet.end_time = time
+        session.add(timesheet)
     session.commit()
     session.close()
 
@@ -173,7 +177,6 @@ def off(message, *something):
     matches = pattern.search(stringutils.translate2han(text))
     if matches:
         groups = matches.groups()
-        print(groups)
         note = groups[0]
 
     session = Session()
@@ -181,9 +184,15 @@ def off(message, *something):
     if filtered:
         filtered.start_time = None
         filtered.end_time = None
+        filtered.kind = 10  # 有休
         filtered.note = note
     else:
-        session.add(Timesheet(user, date, None, None, note))
+        timesheet: Timesheet = Timesheet(user, date)
+        timesheet.start_time = None
+        timesheet.end_time = None
+        timesheet.kind = 10  # 有休
+        timesheet.note = note
+        session.add(timesheet)
     session.commit()
     session.close()
 

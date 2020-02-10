@@ -16,17 +16,16 @@ class Timesheet(Base):
     start_time: datetime.time = sa.Column('start_time', sa.TIME, nullable=True)
     end_time: datetime.time = sa.Column('end_time', sa.TIME, nullable=True)
     note: str = sa.Column('note', sa.String, nullable=True)
+    kind: int = sa.Column('kind', sa.Integer, nullable=False, default=0)
+    customer: str = sa.Column('customer', sa.String, nullable=True)
 
-    def __init__(self, user, date, start_time, end_time, note):
+    def __init__(self, user: str, date: datetime.date):
         self.user = user
         self.date = date
-        self.start_time = start_time
-        self.end_time = end_time
-        self.note = note
 
     def __repr__(self):
-        return '<Timesheet({}, {}, {}, {}, {}, {})>'.format(
-            self.timesheetid, self.user, self.date, self.start_time, self.end_time, self.note)
+        return '<Timesheet({}, {}, {}, {}, {}, {}, {}, {})>'.format(
+            self.timesheetid, self.user, self.date, self.start_time, self.end_time, self.note, self.kind, self.customer)
 
 
 Base.metadata.create_all(engine)
