@@ -25,3 +25,23 @@ heroku pg:psql
 
 time-recorder-viewリポジトリをビルドし、生成されたbuildフォルダをtemplatesフォルダとして
 time-recorderへコピーする。
+
+=== DB定義
+
+.timesheet
+|===
+|論理名|物理名|型|サイズ|PK|UK|FK|NN|備考
+
+|ID|ID|serial||X|||X|
+|user|ユーザID|varchar|9||X||X|SlackのユーザID
+|date|日付|date|||X||X|
+|start_time|始業|time||||||
+|end_time|終業|time||||||
+|note|備考|varchar||||||
+|kind|勤休|integer|||||X|
+|customer|客先|varchar||||||
+|===
+
+unique::
+constraint timesheet_user_date_key unique ("user", date)
+
