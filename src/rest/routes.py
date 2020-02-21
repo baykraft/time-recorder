@@ -90,18 +90,14 @@ def create(year: int, month: int, date: int):
         if record:
             record.customer = customer
             record.kind = kind
-            if start_time:
-                record.start_time = datetime.datetime.strptime(start_time, '%H:%M').time()
-            if end_time:
-                record.end_time = datetime.datetime.strptime(end_time, '%H:%M').time()
+            record.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
+            record.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
             record.note = note
             result = __timesheet_to_result(record)
         else:
             timesheet: Timesheet = Timesheet(user, datetime.date(year, month, date))
-            if start_time:
-                timesheet.start_time = datetime.datetime.strptime(start_time, '%H:%M').time()
-            if end_time:
-                timesheet.end_time = datetime.datetime.strptime(end_time, '%H:%M').time()
+            timesheet.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
+            timesheet.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
             timesheet.note = note
             timesheet.customer = customer
             timesheet.kind = kind
