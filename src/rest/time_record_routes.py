@@ -13,11 +13,35 @@ CORS(module_api)
 Session = sessionmaker(bind=engine, autocommit=False, autoflush=True)
 
 
+@module_api.url_value_preprocessor
+def url_value_preprocessor(endpoint, values):
+    """
+    パラメータで受け取ったトークンに対する認証を実施します。
+
+    :param endpoint: エンドポイント
+    :type endpoint: str
+    :param values: パスパラメータリスト
+    :type values: dict
+    :return: 認証OKの場合は無し、認証NGの場合はJSONメッセージ
+    :rtype: tuple[Any, int]
+    """
+    if 'OPTIONS' != request.method:
+        token = request.args.get('token')
+        r = requests.post('https://slack.com/api/auth.test', {'token': token})
+        j = json.loads(r.text)
+        if j['ok']:
+            values['user'] = j['user_id']
+        else:
+            return jsonify({'ok': j['ok'], 'message': j['error']}), 401
+
+
 @module_api.route('/<int:year>/<int:month>/<int:date>', methods=['DELETE'])
-def delete(year: int, month: int, date: int):
+def delete(user: str, year: int, month: int, date: int):
     """
     指定年月日の勤怠記録情報を削除します。
 
+    :param user: ユーザID
+    :type user: str
     :param year: 年
     :type year: int
     :param month: 月
@@ -27,36 +51,30 @@ def delete(year: int, month: int, date: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    token = request.args.get('token')
-    r = requests.post('https://slack.com/api/auth.test', {'token': token})
-    j = json.loads(r.text)
-    if j['ok']:
-        user = j['user_id']
-        session: Session = Session()
-        record: TimeRecord = session.query(TimeRecord).filter(
-            TimeRecord.user == user,
-            TimeRecord.date == datetime.date(year, month, date)
-        ).first()
+    session: Session = Session()
+    record: TimeRecord = session.query(TimeRecord).filter(
+        TimeRecord.user == user,
+        TimeRecord.date == datetime.date(year, month, date)
+    ).first()
 
-        if record:
-            session.delete(record)
-            session.commit()
-            session.close()
-            return jsonify({'ok': True}), 200
-        else:
-            session.commit()
-            session.close()
-            return jsonify({'ok': False}), 404
-
+    if record:
+        session.delete(record)
+        session.commit()
+        session.close()
+        return jsonify({'ok': True}), 200
     else:
-        return jsonify({'ok': j['ok'], 'message': j['error']}), 401
+        session.commit()
+        session.close()
+        return jsonify({'ok': False}), 404
 
 
 @module_api.route('/<int:year>/<int:month>/<int:date>', methods=['PUT'])
-def update(year: int, month: int, date: int):
+def update(user: str, year: int, month: int, date: int):
     """
     指定年月日の勤怠記録情報を更新します。
 
+    :param user: ユーザID
+    :type user: str
     :param year: 年
     :type year: int
     :param month: 月
@@ -66,47 +84,42 @@ def update(year: int, month: int, date: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    token = request.args.get('token')
-    r = requests.post('https://slack.com/api/auth.test', {'token': token})
-    j = json.loads(r.text)
-    if j['ok']:
-        user = j['user_id']
-        session = Session()
+    session = Session()
 
-        customer = request.json['customer'] if 'customer' in request.json else None
-        kind = request.json['kind'] if 'kind' in request.json else None
-        start_time = request.json['start_time'] if 'start_time' in request.json else None
-        end_time = request.json['end_time'] if 'end_time' in request.json else None
-        note = request.json['note'] if 'note' in request.json else None
+    customer = request.json['customer'] if 'customer' in request.json else None
+    kind = request.json['kind'] if 'kind' in request.json else None
+    start_time = request.json['start_time'] if 'start_time' in request.json else None
+    end_time = request.json['end_time'] if 'end_time' in request.json else None
+    note = request.json['note'] if 'note' in request.json else None
 
-        filtered: TimeRecord = session.query(TimeRecord).filter(
-            TimeRecord.user == user,
-            TimeRecord.date == datetime.date(year, month, date)
-        ).first()
+    filtered: TimeRecord = session.query(TimeRecord).filter(
+        TimeRecord.user == user,
+        TimeRecord.date == datetime.date(year, month, date)
+    ).first()
 
-        if filtered:
-            filtered.customer = customer
-            filtered.kind = kind
-            filtered.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
-            filtered.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
-            filtered.note = note
-            result = __time_record_to_result(filtered)
-            session.commit()
-            session.close()
-            return jsonify({'ok': True, 'record': result}), 200
-        else:
-            session.commit()
-            session.close()
-            return jsonify({'ok': False}), 404
+    if filtered:
+        filtered.customer = customer
+        filtered.kind = kind
+        filtered.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
+        filtered.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
+        filtered.note = note
+        result = __time_record_to_result(filtered)
+        session.commit()
+        session.close()
+        return jsonify({'ok': True, 'record': result}), 200
     else:
-        return jsonify({'ok': j['ok'], 'message': j['error']}), 401
+        session.commit()
+        session.close()
+        return jsonify({'ok': False}), 404
 
 
 @module_api.route('/<int:year>/<int:month>/<int:date>', methods=['POST'])
-def create(year: int, month: int, date: int):
+def create(user: str, year: int, month: int, date: int):
     """
     指定年月日の勤怠記録情報を登録します。
 
+    :param user: ユーザID
+    :type user: str
     :param year: 年
     :type year: int
     :param month: 月
@@ -116,49 +129,45 @@ def create(year: int, month: int, date: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    token = request.args.get('token')
-    r = requests.post('https://slack.com/api/auth.test', {'token': token})
-    j = json.loads(r.text)
-    if j['ok']:
-        user = j['user_id']
-        session = Session()
+    session = Session()
 
-        customer = request.json['customer'] if 'customer' in request.json else None
-        kind = request.json['kind'] if 'kind' in request.json else None
-        start_time = request.json['start_time'] if 'start_time' in request.json else None
-        end_time = request.json['end_time'] if 'end_time' in request.json else None
-        note = request.json['note'] if 'note' in request.json else None
+    customer = request.json['customer'] if 'customer' in request.json else None
+    kind = request.json['kind'] if 'kind' in request.json else None
+    start_time = request.json['start_time'] if 'start_time' in request.json else None
+    end_time = request.json['end_time'] if 'end_time' in request.json else None
+    note = request.json['note'] if 'note' in request.json else None
 
-        filtered: TimeRecord = session.query(TimeRecord).filter(
-            TimeRecord.user == user,
-            TimeRecord.date == datetime.date(year, month, date)
-        ).first()
+    filtered: TimeRecord = session.query(TimeRecord).filter(
+        TimeRecord.user == user,
+        TimeRecord.date == datetime.date(year, month, date)
+    ).first()
 
-        if filtered:
-            session.commit()
-            session.close()
-            return jsonify({'ok': False}), 409
-        else:
-            record: TimeRecord = TimeRecord(user, datetime.date(year, month, date))
-            record.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
-            record.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
-            record.note = note
-            record.customer = customer
-            record.kind = kind
-            session.add(record)
-            result = __time_record_to_result(record)
-            session.commit()
-            session.close()
-            return jsonify({'ok': True, 'record': result}), 200
+    if filtered:
+        session.commit()
+        session.close()
+        return jsonify({'ok': False}), 409
     else:
-        return jsonify({'ok': j['ok'], 'message': j['error']}), 401
+        record: TimeRecord = TimeRecord(user, datetime.date(year, month, date))
+        record.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
+        record.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
+        record.note = note
+        record.customer = customer
+        record.kind = kind
+        session.add(record)
+        session.flush()
+        result = __time_record_to_result(record)
+        session.commit()
+        session.close()
+        return jsonify({'ok': True, 'record': result}), 200
 
 
 @module_api.route('/<int:year>/<int:month>', methods=['GET'])
-def records(year: int, month: int):
+def records(user: str, year: int, month: int):
     """
     指定年月の勤怠記録情報を取得します。
 
+    :param user: ユーザID
+    :type user: str
     :param year: 年
     :type year: int
     :param month: 月
@@ -166,28 +175,21 @@ def records(year: int, month: int):
     :return: 正常時: 勤怠記録情報リスト, 異常時: JSON形式のエラーメッセージ
     :rtype: tuple[Any, int]
     """
-    token = request.args.get('token')
-    r = requests.post('https://slack.com/api/auth.test', {'token': token})
-    j = json.loads(r.text)
-    if j['ok']:
-        user = j['user_id']
-        session = Session()
-        time_records: List[TimeRecord] = session.query(TimeRecord).filter(
-            TimeRecord.user == user,
-            TimeRecord.date >= datetime.date(year, month, 1),
-            TimeRecord.date < datetime.date(year, month + 1, 1)
-        ).all()
+    session = Session()
+    time_records: List[TimeRecord] = session.query(TimeRecord).filter(
+        TimeRecord.user == user,
+        TimeRecord.date >= datetime.date(year, month, 1),
+        TimeRecord.date < datetime.date(year, month + 1, 1)
+    ).all()
 
-        results = []
-        for record in time_records:
-            results.append(__time_record_to_result(record))
+    results = []
+    for record in time_records:
+        results.append(__time_record_to_result(record))
 
-        session.commit()
-        session.close()
+    session.commit()
+    session.close()
 
-        return jsonify({'ok': True, 'records': results}), 200
-    else:
-        return jsonify({'ok': j['ok'], 'message': j['error']}), 401
+    return jsonify({'ok': True, 'records': results}), 200
 
 
 def __time_record_to_result(record: TimeRecord) -> dict:
