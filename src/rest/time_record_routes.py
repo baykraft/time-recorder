@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 import requests
 import json
 import datetime
+import logging
 from flask_cors import CORS
 from plugins.models import engine, TimeRecord
 from sqlalchemy.orm import sessionmaker
@@ -11,6 +12,7 @@ from typing import List
 module_api = Blueprint('times', __name__)
 CORS(module_api)
 Session = sessionmaker(bind=engine, autocommit=False, autoflush=True)
+logger = logging.getLogger('flask.app')
 
 
 @module_api.url_value_preprocessor
@@ -52,20 +54,23 @@ def delete(user: str, year: int, month: int, date: int):
     :rtype: tuple[Any, int]
     """
     session: Session = Session()
-    record: TimeRecord = session.query(TimeRecord).filter(
-        TimeRecord.user == user,
-        TimeRecord.date == datetime.date(year, month, date)
-    ).first()
+    try:
+        record: TimeRecord = session.query(TimeRecord).filter(
+            TimeRecord.user == user,
+            TimeRecord.date == datetime.date(year, month, date)
+        ).first()
 
-    if record:
-        session.delete(record)
+        if record:
+            session.delete(record)
+            return jsonify({'ok': True}), 200
+        else:
+            return jsonify({'ok': False}), 404
+    except Exception as e:
+        session.rollback()
+        logger.error(e)
+    finally:
         session.commit()
         session.close()
-        return jsonify({'ok': True}), 200
-    else:
-        session.commit()
-        session.close()
-        return jsonify({'ok': False}), 404
 
 
 @module_api.route('/<int:year>/<int:month>/<int:date>', methods=['PUT'])
@@ -85,32 +90,34 @@ def update(user: str, year: int, month: int, date: int):
     :rtype: tuple[Any, int]
     """
     session = Session()
+    try:
+        customer = request.json['customer'] if 'customer' in request.json else None
+        kind = request.json['kind'] if 'kind' in request.json else None
+        start_time = request.json['start_time'] if 'start_time' in request.json else None
+        end_time = request.json['end_time'] if 'end_time' in request.json else None
+        note = request.json['note'] if 'note' in request.json else None
 
-    customer = request.json['customer'] if 'customer' in request.json else None
-    kind = request.json['kind'] if 'kind' in request.json else None
-    start_time = request.json['start_time'] if 'start_time' in request.json else None
-    end_time = request.json['end_time'] if 'end_time' in request.json else None
-    note = request.json['note'] if 'note' in request.json else None
+        filtered: TimeRecord = session.query(TimeRecord).filter(
+            TimeRecord.user == user,
+            TimeRecord.date == datetime.date(year, month, date)
+        ).first()
 
-    filtered: TimeRecord = session.query(TimeRecord).filter(
-        TimeRecord.user == user,
-        TimeRecord.date == datetime.date(year, month, date)
-    ).first()
-
-    if filtered:
-        filtered.customer = customer
-        filtered.kind = kind
-        filtered.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
-        filtered.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
-        filtered.note = note
-        result = __time_record_to_result(filtered)
+        if filtered:
+            filtered.customer = customer
+            filtered.kind = kind
+            filtered.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
+            filtered.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
+            filtered.note = note
+            result = __time_record_to_result(filtered)
+            return jsonify({'ok': True, 'record': result}), 200
+        else:
+            return jsonify({'ok': False}), 404
+    except Exception as e:
+        session.rollback()
+        logger.error(e)
+    finally:
         session.commit()
         session.close()
-        return jsonify({'ok': True, 'record': result}), 200
-    else:
-        session.commit()
-        session.close()
-        return jsonify({'ok': False}), 404
 
 
 @module_api.route('/<int:year>/<int:month>/<int:date>', methods=['POST'])
@@ -130,35 +137,37 @@ def create(user: str, year: int, month: int, date: int):
     :rtype: tuple[Any, int]
     """
     session = Session()
+    try:
+        customer = request.json['customer'] if 'customer' in request.json else None
+        kind = request.json['kind'] if 'kind' in request.json else None
+        start_time = request.json['start_time'] if 'start_time' in request.json else None
+        end_time = request.json['end_time'] if 'end_time' in request.json else None
+        note = request.json['note'] if 'note' in request.json else None
 
-    customer = request.json['customer'] if 'customer' in request.json else None
-    kind = request.json['kind'] if 'kind' in request.json else None
-    start_time = request.json['start_time'] if 'start_time' in request.json else None
-    end_time = request.json['end_time'] if 'end_time' in request.json else None
-    note = request.json['note'] if 'note' in request.json else None
+        filtered: TimeRecord = session.query(TimeRecord).filter(
+            TimeRecord.user == user,
+            TimeRecord.date == datetime.date(year, month, date)
+        ).first()
 
-    filtered: TimeRecord = session.query(TimeRecord).filter(
-        TimeRecord.user == user,
-        TimeRecord.date == datetime.date(year, month, date)
-    ).first()
-
-    if filtered:
+        if filtered:
+            return jsonify({'ok': False}), 409
+        else:
+            record: TimeRecord = TimeRecord(user, datetime.date(year, month, date))
+            record.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
+            record.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
+            record.note = note
+            record.customer = customer
+            record.kind = kind
+            session.add(record)
+            session.flush()
+            result = __time_record_to_result(record)
+            return jsonify({'ok': True, 'record': result}), 200
+    except Exception as e:
+        session.rollback()
+        logger.error(e)
+    finally:
         session.commit()
         session.close()
-        return jsonify({'ok': False}), 409
-    else:
-        record: TimeRecord = TimeRecord(user, datetime.date(year, month, date))
-        record.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
-        record.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
-        record.note = note
-        record.customer = customer
-        record.kind = kind
-        session.add(record)
-        session.flush()
-        result = __time_record_to_result(record)
-        session.commit()
-        session.close()
-        return jsonify({'ok': True, 'record': result}), 200
 
 
 @module_api.route('/<int:year>/<int:month>', methods=['GET'])
@@ -176,20 +185,24 @@ def records(user: str, year: int, month: int):
     :rtype: tuple[Any, int]
     """
     session = Session()
-    time_records: List[TimeRecord] = session.query(TimeRecord).filter(
-        TimeRecord.user == user,
-        TimeRecord.date >= datetime.date(year, month, 1),
-        TimeRecord.date < datetime.date(year, month + 1, 1)
-    ).all()
+    try:
+        time_records: List[TimeRecord] = session.query(TimeRecord).filter(
+            TimeRecord.user == user,
+            TimeRecord.date >= datetime.date(year, month, 1),
+            TimeRecord.date < datetime.date(year, month + 1, 1)
+        ).all()
 
-    results = []
-    for record in time_records:
-        results.append(__time_record_to_result(record))
+        results = []
+        for record in time_records:
+            results.append(__time_record_to_result(record))
 
-    session.commit()
-    session.close()
-
-    return jsonify({'ok': True, 'records': results}), 200
+        return jsonify({'ok': True, 'records': results}), 200
+    except Exception as e:
+        session.rollback()
+        logger.error(e)
+    finally:
+        session.commit()
+        session.close()
 
 
 def __time_record_to_result(record: TimeRecord) -> dict:

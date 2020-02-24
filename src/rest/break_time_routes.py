@@ -5,12 +5,14 @@ from sqlalchemy.orm import sessionmaker
 import requests
 import json
 import datetime
+import logging
 from typing import List
 
 
 module_api = Blueprint('break_times', __name__)
 CORS(module_api)
 Session = sessionmaker(bind=engine, autocommit=False, autoflush=True)
+logger = logging.getLogger('flask.app')
 
 
 @module_api.url_value_preprocessor
@@ -48,32 +50,34 @@ def update(user: str, break_time_id: int):
     :rtype: tuple[Any, int]
     """
     session = Session()
+    try:
+        year = request.json['year'] if 'year' in request.json else None
+        month = request.json['month'] if 'month' in request.json else None
+        customer = request.json['customer'] if 'customer' in request.json else None
+        start_time = request.json['start_time'] if 'start_time' in request.json else None
+        end_time = request.json['end_time'] if 'end_time' in request.json else None
 
-    year = request.json['year'] if 'year' in request.json else None
-    month = request.json['month'] if 'month' in request.json else None
-    customer = request.json['customer'] if 'customer' in request.json else None
-    start_time = request.json['start_time'] if 'start_time' in request.json else None
-    end_time = request.json['end_time'] if 'end_time' in request.json else None
+        filtered: BreakTime = session.query(BreakTime).filter(
+            BreakTime.break_time_id == break_time_id,
+            BreakTime.user == user
+        ).first()
 
-    filtered: BreakTime = session.query(BreakTime).filter(
-        BreakTime.break_time_id == break_time_id,
-        BreakTime.user == user
-    ).first()
-
-    if filtered:
-        filtered.year = year
-        filtered.month = month
-        filtered.customer = customer
-        filtered.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
-        filtered.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
-        result = __break_time_to_result(filtered)
+        if filtered:
+            filtered.year = year
+            filtered.month = month
+            filtered.customer = customer
+            filtered.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
+            filtered.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
+            result = __break_time_to_result(filtered)
+            return jsonify({'ok': True, 'record': result}), 200
+        else:
+            return jsonify({'ok': False}), 404
+    except Exception as e:
+        session.rollback()
+        logger.error(e)
+    finally:
         session.commit()
         session.close()
-        return jsonify({'ok': True, 'record': result}), 200
-    else:
-        session.commit()
-        session.close()
-        return jsonify({'ok': False}), 404
 
 
 @module_api.route('', methods=['POST'])
@@ -87,27 +91,31 @@ def create(user: str):
     :rtype: tuple[Any, int]
     """
     session = Session()
+    try:
+        year = request.json['year'] if 'year' in request.json else None
+        month = request.json['month'] if 'month' in request.json else None
+        customer = request.json['customer'] if 'customer' in request.json else None
+        start_time = request.json['start_time'] if 'start_time' in request.json else None
+        end_time = request.json['end_time'] if 'end_time' in request.json else None
 
-    year = request.json['year'] if 'year' in request.json else None
-    month = request.json['month'] if 'month' in request.json else None
-    customer = request.json['customer'] if 'customer' in request.json else None
-    start_time = request.json['start_time'] if 'start_time' in request.json else None
-    end_time = request.json['end_time'] if 'end_time' in request.json else None
+        record: BreakTime = BreakTime(
+            user,
+            year,
+            month,
+            customer,
+            datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None,
+            datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None)
+        session.add(record)
+        session.flush()
+        result = __break_time_to_result(record)
 
-    record: BreakTime = BreakTime(
-        user,
-        year,
-        month,
-        customer,
-        datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None,
-        datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None)
-    session.add(record)
-    session.flush()
-    result = __break_time_to_result(record)
-    session.commit()
-    session.close()
-
-    return jsonify({'ok': True, 'record': result}), 200
+        return jsonify({'ok': True, 'record': result}), 200
+    except Exception as e:
+        session.rollback()
+        logger.error(e)
+    finally:
+        session.commit()
+        session.close()
 
 
 @module_api.route('/<int:break_time_id>', methods=['DELETE'])
@@ -123,20 +131,23 @@ def delete(user: str, break_time_id: int):
     :rtype: tuple[Any, int]
     """
     session: Session = Session()
-    record: BreakTime = session.query(BreakTime).filter(
-        BreakTime.break_time_id == break_time_id,
-        BreakTime.user == user
-    ).first()
+    try:
+        record: BreakTime = session.query(BreakTime).filter(
+            BreakTime.break_time_id == break_time_id,
+            BreakTime.user == user
+        ).first()
 
-    if record:
-        session.delete(record)
+        if record:
+            session.delete(record)
+            return jsonify({'ok': True}), 200
+        else:
+            return jsonify({'ok': False}), 404
+    except Exception as e:
+        session.rollback()
+        logger.error(e)
+    finally:
         session.commit()
         session.close()
-        return jsonify({'ok': True}), 200
-    else:
-        session.commit()
-        session.close()
-        return jsonify({'ok': False}), 404
 
 
 @module_api.route('', methods=['GET'])
@@ -150,18 +161,22 @@ def records(user: str):
     :rtype: tuple[Any, int]
     """
     session: Session = Session()
-    break_times: List[BreakTime] = session.query(BreakTime).filter(
-        BreakTime.user == user
-    ).all()
+    try:
+        break_times: List[BreakTime] = session.query(BreakTime).filter(
+            BreakTime.user == user
+        ).all()
 
-    results = []
-    for record in break_times:
-        results.append(__break_time_to_result(record))
+        results = []
+        for record in break_times:
+            results.append(__break_time_to_result(record))
 
-    session.commit()
-    session.close()
-
-    return jsonify({'ok': True, 'records': results}), 200
+        return jsonify({'ok': True, 'records': results}), 200
+    except Exception as e:
+        session.rollback()
+        logger.error(e)
+    finally:
+        session.commit()
+        session.close()
 
 
 def __break_time_to_result(record: BreakTime):
