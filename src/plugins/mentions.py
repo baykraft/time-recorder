@@ -1,7 +1,7 @@
 from slackbot.bot import listen_to
 
 from plugins import dateutils, stringutils
-from plugins.models import engine, Timesheet
+from plugins.models import engine, TimeRecord
 from sqlalchemy.orm import sessionmaker
 import re
 
@@ -49,13 +49,13 @@ def sign_in(message, *something):
     user = message.body['user']
 
     session = Session()
-    filtered: Timesheet = session.query(Timesheet).filter(Timesheet.user == user, Timesheet.date == date).first()
+    filtered: TimeRecord = session.query(TimeRecord).filter(TimeRecord.user == user, TimeRecord.date == date).first()
     if filtered:
         filtered.start_time = time
     else:
-        timesheet: Timesheet = Timesheet(user, date)
-        timesheet.start_time = time
-        session.add(timesheet)
+        record: TimeRecord = TimeRecord(user, date)
+        record.start_time = time
+        session.add(record)
     session.commit()
     session.close()
 
@@ -122,13 +122,13 @@ def sign_out(message, *something):
     user = message.body['user']
 
     session = Session()
-    filtered: Timesheet = session.query(Timesheet).filter(Timesheet.user == user, Timesheet.date == date).first()
+    filtered: TimeRecord = session.query(TimeRecord).filter(TimeRecord.user == user, TimeRecord.date == date).first()
     if filtered:
         filtered.end_time = time
     else:
-        timesheet: Timesheet = Timesheet(user, date)
-        timesheet.end_time = time
-        session.add(timesheet)
+        record: TimeRecord = TimeRecord(user, date)
+        record.end_time = time
+        session.add(record)
     session.commit()
     session.close()
 
@@ -180,19 +180,19 @@ def off(message, *something):
         note = groups[0]
 
     session = Session()
-    filtered: Timesheet = session.query(Timesheet).filter(Timesheet.user == user, Timesheet.date == date).first()
+    filtered: TimeRecord = session.query(TimeRecord).filter(TimeRecord.user == user, TimeRecord.date == date).first()
     if filtered:
         filtered.start_time = None
         filtered.end_time = None
         filtered.kind = 10  # 有休
         filtered.note = note
     else:
-        timesheet: Timesheet = Timesheet(user, date)
-        timesheet.start_time = None
-        timesheet.end_time = None
-        timesheet.kind = 10  # 有休
-        timesheet.note = note
-        session.add(timesheet)
+        record: TimeRecord = TimeRecord(user, date)
+        record.start_time = None
+        record.end_time = None
+        record.kind = 10  # 有休
+        record.note = note
+        session.add(record)
     session.commit()
     session.close()
 

@@ -28,11 +28,11 @@ time-recorderへコピーする。
 
 === DB定義
 
-.timesheet
+.time_records
 |===
-|論理名|物理名|型|サイズ|PK|UK|FK|NN|備考
+|物理名|論理名|型|サイズ|PK|UK|FK|NN|備考
 
-|ID|ID|serial||X|||X|
+|time_record_id|ID|serial||X|||X|
 |user|ユーザID|varchar|9||X||X|SlackのユーザID
 |date|日付|date|||X||X|
 |start_time|始業|time||||||
@@ -42,6 +42,22 @@ time-recorderへコピーする。
 |customer|客先|varchar||||||
 |===
 
-unique::
-constraint timesheet_user_date_key unique ("user", date)
+Indexes::
+    "time_records_pkey" PRIMARY KEY, btree (time_record_id)
+    "time_records_user_date_key" UNIQUE CONSTRAINT, btree ("user", date)
 
+.break_times
+|===
+|物理名|論理名|型|サイズ|PK|UK|FK|NN|備考
+
+|break_time_id|ID|serial||X|||X|
+|user|ユーザID|varchar|9||||X|SlackのユーザID
+|year|年|integer|||||X|
+|month|月|integer|||||X|
+|customer|客先|varchar|||||X|
+|start_time|始業|time|||||X|
+|end_time|終業|time|||||X|
+|===
+
+Indexes::
+    "break_times_pkey" PRIMARY KEY, btree (break_time_id)
