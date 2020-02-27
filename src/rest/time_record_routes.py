@@ -4,7 +4,7 @@ import json
 import datetime
 import logging
 from flask_cors import CORS
-from plugins.models import engine, TimeRecord
+from plugins.models import engine, TimeRecord, BreakTime
 from sqlalchemy.orm import sessionmaker
 from typing import List
 
@@ -89,7 +89,7 @@ def update(user: str, year: int, month: int, date: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    session = Session()
+    session: Session = Session()
     try:
         customer = request.json['customer'] if 'customer' in request.json else None
         kind = request.json['kind'] if 'kind' in request.json else None
@@ -108,7 +108,7 @@ def update(user: str, year: int, month: int, date: int):
             filtered.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
             filtered.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
             filtered.note = note
-            result = __time_record_to_result(filtered)
+            result = __time_record_to_result(user, filtered)
             return jsonify({'ok': True, 'record': result}), 200
         else:
             return jsonify({'ok': False}), 404
@@ -136,7 +136,7 @@ def create(user: str, year: int, month: int, date: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    session = Session()
+    session: Session = Session()
     try:
         customer = request.json['customer'] if 'customer' in request.json else None
         kind = request.json['kind'] if 'kind' in request.json else None
@@ -160,7 +160,7 @@ def create(user: str, year: int, month: int, date: int):
             record.kind = kind
             session.add(record)
             session.flush()
-            result = __time_record_to_result(record)
+            result = __time_record_to_result(user, record)
             return jsonify({'ok': True, 'record': result}), 200
     except Exception as e:
         session.rollback()
@@ -184,7 +184,7 @@ def records(user: str, year: int, month: int):
     :return: 正常時: 勤怠記録情報リスト, 異常時: JSON形式のエラーメッセージ
     :rtype: tuple[Any, int]
     """
-    session = Session()
+    session: Session = Session()
     try:
         time_records: List[TimeRecord] = session.query(TimeRecord).filter(
             TimeRecord.user == user,
@@ -194,7 +194,7 @@ def records(user: str, year: int, month: int):
 
         results = []
         for record in time_records:
-            results.append(__time_record_to_result(record))
+            results.append(__time_record_to_result(user, record))
 
         return jsonify({'ok': True, 'records': results}), 200
     except Exception as e:
@@ -205,7 +205,7 @@ def records(user: str, year: int, month: int):
         session.close()
 
 
-def __time_record_to_result(record: TimeRecord) -> dict:
+def __time_record_to_result(user: str, record: TimeRecord) -> dict:
     """
     TimeRecordエンティティを辞書型オブジェクトに変換します。
 
@@ -214,25 +214,54 @@ def __time_record_to_result(record: TimeRecord) -> dict:
     :return: 勤怠記録情報を表す辞書型オブジェクト
     :rtype: dict
     """
-    if record.start_time and record.end_time:
-        dt1: datetime = datetime.datetime.combine(record.date, record.start_time)
-        dt2: datetime = datetime.datetime.combine(record.date, record.end_time)
-        seconds = (dt2 - dt1).total_seconds()
-        m, s = divmod(seconds, 60)  # 秒を60で割った答えがm(分), 余りがs(秒)
-        h, m = divmod(m, 60)        # 分を60で割った答えがh(時), 余りがm(分)
-        total_time = datetime.time(hour=int(h), minute=int(m))
-    else:
-        total_time = None
+    session: Session = Session()
+    try:
+        if record.start_time and record.end_time:
 
-    return {
-        'time_record_id': record.time_record_id,
-        'year': record.date.year,
-        'month': record.date.month,
-        'date': record.date.day,
-        'customer': record.customer,
-        'kind': record.kind,
-        'start_time': '{0:%H:%M}'.format(record.start_time) if record.start_time else None,
-        'end_time': '{0:%H:%M}'.format(record.end_time) if record.end_time else None,
-        'total_time': '{0:%H:%M}'.format(total_time) if total_time else None,
-        'note': record.note
-    }
+            # 指定された客先の休憩時間リストを取得
+            break_times: List[BreakTime] = session.query(BreakTime).filter(
+                BreakTime.user == user,
+                BreakTime.year == record.date.year,
+                BreakTime.month == record.date.month,
+                BreakTime.customer == record.customer
+            ).all()
+
+            # 休憩時間を考慮しない稼働時間を算出
+            dt1: datetime = datetime.datetime.combine(record.date, record.start_time)
+            dt2: datetime = datetime.datetime.combine(record.date, record.end_time)
+            seconds: float = (dt2 - dt1).total_seconds()
+
+            # 稼働時間から休憩時間を控除
+            for break_time in break_times:
+                bt1: datetime = datetime.datetime.combine(record.date, break_time.start_time)
+                bt2: datetime = datetime.datetime.combine(record.date, break_time.end_time)
+                if bt2 > dt1 and bt1 < dt2:
+                    start: datetime = dt1 if dt1 > bt1 else bt1
+                    end: datetime = dt2 if dt2 < bt2 else bt2
+                    seconds = seconds - (end - start).total_seconds()
+
+            # 休憩時間を控除した稼働時間をdatetime.time型に変換
+            m, s = divmod(seconds, 60)  # 秒を60で割った答えがm(分), 余りがs(秒)
+            h, m = divmod(m, 60)        # 分を60で割った答えがh(時), 余りがm(分)
+            total_time = datetime.time(hour=int(h), minute=int(m))
+        else:
+            total_time = None
+
+        return {
+            'time_record_id': record.time_record_id,
+            'year': record.date.year,
+            'month': record.date.month,
+            'date': record.date.day,
+            'customer': record.customer,
+            'kind': record.kind,
+            'start_time': '{0:%H:%M}'.format(record.start_time) if record.start_time else None,
+            'end_time': '{0:%H:%M}'.format(record.end_time) if record.end_time else None,
+            'total_time': '{0:%H:%M}'.format(total_time) if total_time else None,
+            'note': record.note
+        }
+    except Exception as e:
+        session.rollback()
+        logger.error(e)
+    finally:
+        session.commit()
+        session.close()
