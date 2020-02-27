@@ -4,6 +4,7 @@ from plugins import dateutils, stringutils
 from plugins.models import engine, TimeRecord
 from sqlalchemy.orm import sessionmaker
 import re
+import logging
 
 Session = sessionmaker(bind=engine, autocommit=False, autoflush=True)
 
@@ -49,18 +50,26 @@ def sign_in(message, *something):
     user = message.body['user']
 
     session = Session()
-    filtered: TimeRecord = session.query(TimeRecord).filter(TimeRecord.user == user, TimeRecord.date == date).first()
-    if filtered:
-        filtered.start_time = time
-    else:
-        record: TimeRecord = TimeRecord(user, date)
-        record.start_time = time
-        session.add(record)
-    session.commit()
-    session.close()
+    try:
+        filtered: TimeRecord = session.query(TimeRecord).filter(
+            TimeRecord.user == user,
+            TimeRecord.date == date).first()
+        if filtered:
+            filtered.start_time = time
+        else:
+            record: TimeRecord = TimeRecord(user, date)
+            record.start_time = time
+            session.add(record)
 
-    now = "{0:%Y/%m/%d %H:%M}".format(date_time)
-    message.reply(f'おはようございます ({now})')
+        now = "{0:%Y/%m/%d %H:%M}".format(date_time)
+        message.reply(f'おはようございます ({now})')
+
+    except Exception as e:
+        session.rollback()
+        logging.error(e)
+    finally:
+        session.commit()
+        session.close()
 
 
 @listen_to(r'(バ[ー〜ァ]*イ|ば[ー〜ぁ]*い|おやすみ|お[つっ]ー|おつ|さらば|お先|お疲|帰|乙|bye|night|(c|see)\s*(u|you)|退勤|ごきげんよ|グ[ッ]?バイ|さようなら)')
@@ -122,18 +131,24 @@ def sign_out(message, *something):
     user = message.body['user']
 
     session = Session()
-    filtered: TimeRecord = session.query(TimeRecord).filter(TimeRecord.user == user, TimeRecord.date == date).first()
-    if filtered:
-        filtered.end_time = time
-    else:
-        record: TimeRecord = TimeRecord(user, date)
-        record.end_time = time
-        session.add(record)
-    session.commit()
-    session.close()
+    try:
+        filtered: TimeRecord = session.query(TimeRecord).filter(TimeRecord.user == user, TimeRecord.date == date).first()
+        if filtered:
+            filtered.end_time = time
+        else:
+            record: TimeRecord = TimeRecord(user, date)
+            record.end_time = time
+            session.add(record)
 
-    now = "{0:%Y/%m/%d %H:%M}".format(date_time)
-    message.reply(f'お疲れ様でした ({now})')
+        now = "{0:%Y/%m/%d %H:%M}".format(date_time)
+        message.reply(f'お疲れ様でした ({now})')
+
+    except Exception as e:
+        session.rollback()
+        logging.error(e)
+    finally:
+        session.commit()
+        session.close()
 
 
 @listen_to(r'(休|やす(ま|み|む)|休暇)')
@@ -180,21 +195,29 @@ def off(message, *something):
         note = groups[0]
 
     session = Session()
-    filtered: TimeRecord = session.query(TimeRecord).filter(TimeRecord.user == user, TimeRecord.date == date).first()
-    if filtered:
-        filtered.start_time = None
-        filtered.end_time = None
-        filtered.kind = 10  # 有休
-        filtered.note = note
-    else:
-        record: TimeRecord = TimeRecord(user, date)
-        record.start_time = None
-        record.end_time = None
-        record.kind = 10  # 有休
-        record.note = note
-        session.add(record)
-    session.commit()
-    session.close()
+    try:
+        filtered: TimeRecord = session.query(TimeRecord).filter(
+            TimeRecord.user == user,
+            TimeRecord.date == date).first()
+        if filtered:
+            filtered.start_time = None
+            filtered.end_time = None
+            filtered.kind = 10  # 有休
+            filtered.note = note
+        else:
+            record: TimeRecord = TimeRecord(user, date)
+            record.start_time = None
+            record.end_time = None
+            record.kind = 10  # 有休
+            record.note = note
+            session.add(record)
 
-    now = "{0:%Y/%m/%d}".format(date_time)
-    message.reply(f'{now} を休暇として登録しました')
+        now = "{0:%Y/%m/%d}".format(date_time)
+        message.reply(f'{now} を休暇として登録しました')
+
+    except Exception as e:
+        session.rollback()
+        logging.error(e)
+    finally:
+        session.commit()
+        session.close()
