@@ -43,7 +43,7 @@ time-recorderへコピーする。
 |===
 
 Indexes::
-    "time_records_pkey" PRIMARY KEY, btree (time_record_id)
+    "time_records_pkey" PRIMARY KEY, btree (time_record_id) +
     "time_records_user_date_key" UNIQUE CONSTRAINT, btree ("user", date)
 
 .break_times
