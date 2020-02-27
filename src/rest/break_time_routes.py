@@ -49,7 +49,7 @@ def update(user: str, break_time_id: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    session = Session()
+    session: Session = Session()
     try:
         year = request.json['year'] if 'year' in request.json else None
         month = request.json['month'] if 'month' in request.json else None
@@ -90,7 +90,7 @@ def create(user: str):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    session = Session()
+    session: Session = Session()
     try:
         year = request.json['year'] if 'year' in request.json else None
         month = request.json['month'] if 'month' in request.json else None
