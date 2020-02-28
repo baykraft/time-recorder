@@ -1,13 +1,72 @@
-== Baykraft 勤怠記録アプリ
+== Baykraft 勤怠記録および記録操作 Web API
 
-=== 環境構築
+株式会社ベイクラフトの勤怠記録をするためのアプリケーションです。
+
+本アプリケーションは２つのモジュールで構成されます。１つ目はSlackの呟きを受信してDBへ記録（Slackボット）、２つ目はDBに記録された勤怠記録を操作するためのWeb APIです。Slackボットモジュールのロジックは https://github.com/masuidrive/miyamoto[勤怠管理bot - みやもとさん] を参考にしています。そのため、記録される呟きの書式は一部改修した部分を除き同一です。
+
+=== Slackボットモジュールについて
+
+==== 出勤記録
+
+以下のようなメッセージに反応します。
+----
+モーニング, モ〜ニング, もーにんぐ, も〜にんぐ, おっは, おは, へろ, はろ, ヘロ, ハロ, hi, hello, morning, 出勤
+----
+
+メッセージには日時を指定することが可能です。日時を指定しない場合は現在日時で記録されます。
+----
+おはようございます 2020/1/29 9:00
+おはようございます 1/29 9:00
+おはようございます 1/29
+おはようございます
+----
+
+==== 退勤記録
+
+以下のようなメッセージに反応します。
+----
+バイ, バーイ, バ〜イ, バァイ, ばい, ばーい, ば〜い, ばぁい, おやすみ, おつ, おっー, さらば, お先, お疲, 帰, 乙, bye, night, cu, c u, cyou, c you, seeu, see u, seeyou, see you, 退勤, ごきげんよ, グッバイ, グバイ, さようなら
+----
+
+メッセージには日時を指定することが可能です。日時を指定しない場合は現在日時で記録されます。
+----
+お疲れ様でした 2020/1/29 17:30
+お疲れ様でした 1/29 17:30
+お疲れ様でした 1/29
+お疲れ様でした
+----
+
+==== 休暇記録
+
+以下のようなメッセージに反応します。
+----
+休, やすま, やすみ, やすむ, 休暇
+----
+
+メッセージには日時を指定することが可能です。日時を指定しない場合は現在日時で記録されます。
+----
+休み 2020/1/29 17:30
+休み 1/29 17:30
+休み 1/29
+休み
+----
+
+また、シングルクォートで文字列を括ることでメモ情報を記録することができます。
+----
+休み 1/30 "ここがメモとして記録される"
+休み "ここがメモとして記録される"
+----
+
+=== 開発メモ
+
+==== 環境構築
 
 1. https://baykraft.slack.com にアクセス
 2. 左側メニューの「アプリを追加する」を選択
 3. 検索欄に「Hubot」と入力
 4. Hubotをインストール
 
-=== Herokuへの環境変数設定
+==== Herokuへの環境変数設定
 
 [source,sh]
 ----
@@ -21,16 +80,17 @@ heroku config:set BOT_API_TOKEN="hubotのaccess_token"
 heroku pg:psql
 ----
 
-=== Viewモジュールのコピー
+==== Viewモジュールのコピー
 
 time-recorder-viewリポジトリをビルドし、生成されたbuildフォルダをtemplatesフォルダとして
 time-recorderへコピーする。
 
-=== DB定義
+==== DB定義
 
-.time_records
+.勤怠記録
 |===
-|物理名|論理名|型|サイズ|PK|UK|FK|NN|備考
+9+h|time_records
+h|物理名 h|論理名 h|型 h|サイズ h|PK h|UK h|FK h|NN h|備考
 
 |time_record_id|ID|serial||X|||X|
 |user|ユーザID|varchar|9||X||X|SlackのユーザID
@@ -40,15 +100,17 @@ time-recorderへコピーする。
 |note|備考|varchar||||||
 |kind|勤休|integer|||||X|
 |customer|客先|varchar||||||
-|===
 
+9+a|
 Indexes::
     "time_records_pkey" PRIMARY KEY, btree (time_record_id) +
     "time_records_user_date_key" UNIQUE CONSTRAINT, btree ("user", date)
+|===
 
 .break_times
 |===
-|物理名|論理名|型|サイズ|PK|UK|FK|NN|備考
+9+h|break_times
+h|物理名 h|論理名 h|型 h|サイズ h|PK h|UK h|FK h|NN h|備考
 
 |break_time_id|ID|serial||X|||X|
 |user|ユーザID|varchar|9||||X|SlackのユーザID
@@ -57,7 +119,8 @@ Indexes::
 |customer|客先|varchar|||||X|
 |start_time|始業|time|||||X|
 |end_time|終業|time|||||X|
-|===
 
+9+a|
 Indexes::
     "break_times_pkey" PRIMARY KEY, btree (break_time_id)
+|===
