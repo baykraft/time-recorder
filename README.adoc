@@ -87,6 +87,9 @@ time-recorderへコピーする。
 
 ==== DB定義
 
+PK: プライマリキー, UK: ユニークキー, FK: 外部キー, NN: Not Null
+
+[options="footer"]
 .勤怠記録
 |===
 9+h|time_records
@@ -107,6 +110,7 @@ Indexes::
     "time_records_user_date_key" UNIQUE CONSTRAINT, btree ("user", date)
 |===
 
+[options="footer"]
 .休憩時間
 |===
 9+h|break_times
