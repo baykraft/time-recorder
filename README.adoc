@@ -107,7 +107,7 @@ Indexes::
     "time_records_user_date_key" UNIQUE CONSTRAINT, btree ("user", date)
 |===
 
-.break_times
+.休憩時間
 |===
 9+h|break_times
 h|物理名 h|論理名 h|型 h|サイズ h|PK h|UK h|FK h|NN h|備考
