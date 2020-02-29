@@ -1,7 +1,7 @@
 import os
 
 # SlackのAPIを利用するためのトークン
-# アプリとして追加した「Hubot」のトークンを貼り付ける
+# アプリとして追加した勤怠ボットのトークンを貼り付ける
 API_TOKEN = os.environ.get('BOT_API_TOKEN')
 
 # 対応するメッセージがなかった場合に反応するメッセージ
