@@ -8,6 +8,9 @@ engine = sa.create_engine(os.environ.get('DATABASE_URL'))
 
 
 class TimeRecord(Base):
+    """
+    勤怠記録
+    """
     __tablename__ = 'time_records'
     __table_args__ = (sa.UniqueConstraint('user', 'date'), {})
     time_record_id: int = sa.Column('time_record_id', sa.Integer, primary_key=True, autoincrement=True)
@@ -30,6 +33,9 @@ class TimeRecord(Base):
 
 
 class BreakTime(Base):
+    """
+    休憩時間
+    """
     __tablename__ = 'break_times'
     break_time_id: int = sa.Column('break_time_id', sa.Integer, primary_key=True, autoincrement=True)
     user: str = sa.Column('user', sa.String(9), nullable=False)
@@ -56,6 +62,38 @@ class BreakTime(Base):
     def __repr__(self):
         return '<BreakTime({}, {}, {}, {}, {}, {}, {})>'.format(
             self.break_time_id, self.user, self.year, self.month, self.customer, self.start_time, self.end_time)
+
+
+class FixedTime(Base):
+    """
+    所定時間
+    """
+    __tablename__ = 'fixed_times'
+    fixed_time_id: int = sa.Column('fixed_time_id', sa.Integer, primary_key=True, autoincrement=True)
+    user: str = sa.Column('user', sa.String(9), nullable=False)
+    year: int = sa.Column('year', sa.Integer, nullable=False)
+    month: int = sa.Column('month', sa.Integer, nullable=False)
+    customer: str = sa.Column('customer', sa.String, nullable=False)
+    start_time: datetime.time = sa.Column('start_time', sa.TIME, nullable=False)
+    end_time: datetime.time = sa.Column('end_time', sa.TIME, nullable=False)
+
+    def __init__(self,
+                 user: str,
+                 year: int,
+                 month: int,
+                 customer: str,
+                 start_time: datetime.time,
+                 end_time: datetime.time):
+        self.user = user
+        self.year = year
+        self.month = month
+        self.customer = customer
+        self.start_time = start_time
+        self.end_time = end_time
+
+    def __repr__(self):
+        return '<FixedTime({}, {}, {}, {}, {}, {}, {})>'.format(
+            self.fixed_time_id, self.user, self.year, self.month, self.customer, self.start_time, self.end_time)
 
 
 Base.metadata.create_all(engine)

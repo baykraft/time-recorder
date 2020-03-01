@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from typing import List
 
 
-module_api = Blueprint('times', __name__)
+module_api = Blueprint('time_records', __name__)
 CORS(module_api)
 Session = sessionmaker(bind=engine, autocommit=False, autoflush=True)
 logger = logging.getLogger('flask.app')
