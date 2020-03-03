@@ -69,7 +69,8 @@ def delete(user: str, year: int, month: int, date: int):
         session.rollback()
         logger.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()
 
 
@@ -116,7 +117,8 @@ def update(user: str, year: int, month: int, date: int):
         session.rollback()
         logger.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()
 
 
@@ -166,7 +168,8 @@ def create(user: str, year: int, month: int, date: int):
         session.rollback()
         logger.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()
 
 
@@ -201,7 +204,8 @@ def records(user: str, year: int, month: int):
         session.rollback()
         logger.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()
 
 
@@ -315,5 +319,6 @@ def __time_record_to_result(user: str, record: TimeRecord) -> dict:
         session.rollback()
         logger.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()

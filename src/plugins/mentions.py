@@ -68,7 +68,8 @@ def sign_in(message, *something):
         session.rollback()
         logging.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()
 
 
@@ -147,7 +148,8 @@ def sign_out(message, *something):
         session.rollback()
         logging.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()
 
 
@@ -219,5 +221,6 @@ def off(message, *something):
         session.rollback()
         logging.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()

@@ -1,10 +1,31 @@
 import sqlalchemy as sa
 import os
 import datetime
+from sqlalchemy import exc, event
+from sqlalchemy.pool import Pool
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 engine = sa.create_engine(os.environ.get('DATABASE_URL'))
+
+
+@event.listens_for(Pool, 'checkout')
+def ping_connection(dbapi_connection, connection_record, connection_proxy):
+    """
+    プールされているコネクションが有効かどうか判定します。
+
+    :param dbapi_connection: DBAPI connection
+    :param connection_record: connection record
+    :param connection_proxy: connection proxy
+    :return: None
+    """
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute('SELECT 1')
+    except Exception as e:
+        raise exc.DisconnectionError(e)
+    finally:
+        cursor.close()
 
 
 class TimeRecord(Base):

@@ -76,7 +76,8 @@ def update(user: str, break_time_id: int):
         session.rollback()
         logger.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()
 
 
@@ -114,7 +115,8 @@ def create(user: str):
         session.rollback()
         logger.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()
 
 
@@ -146,7 +148,8 @@ def delete(user: str, break_time_id: int):
         session.rollback()
         logger.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()
 
 
@@ -175,7 +178,8 @@ def records(user: str):
         session.rollback()
         logger.error(e)
     finally:
-        session.commit()
+        if session.is_active():
+            session.commit()
         session.close()
 
 
