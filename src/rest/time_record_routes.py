@@ -4,7 +4,7 @@ import json
 import datetime
 import logging
 from flask_cors import CORS
-from plugins.models import engine, TimeRecord, BreakTime
+from plugins.models import engine, TimeRecord, BreakTime, FixedTime
 from sqlalchemy.orm import sessionmaker
 from typing import List
 
@@ -205,10 +205,68 @@ def records(user: str, year: int, month: int):
         session.close()
 
 
+def __calc_total_time(break_times: List[BreakTime], record: TimeRecord) -> datetime.time:
+    """
+    合計時間を算出します。
+
+    :param break_times: 休憩時間リスト
+    :type break_times: List[BreakTime]
+    :param record: TimeRecordエンティティ
+    :type record: TimeRecord
+    :return: 合計時間
+    :rtype: datetime.time
+    """
+    dt1: datetime = datetime.datetime.combine(record.date, record.start_time)
+    dt2: datetime = datetime.datetime.combine(record.date, record.end_time)
+    seconds: float = (dt2 - dt1).total_seconds()
+
+    # 稼働時間から休憩時間を控除
+    for break_time in break_times:
+        bt1: datetime = datetime.datetime.combine(record.date, break_time.start_time)
+        bt2: datetime = datetime.datetime.combine(record.date, break_time.end_time)
+        if bt2 > dt1 and bt1 < dt2:
+            start: datetime = dt1 if dt1 > bt1 else bt1
+            end: datetime = dt2 if dt2 < bt2 else bt2
+            seconds = seconds - (end - start).total_seconds()
+
+    # 休憩時間を控除した稼働時間をdatetime.time型に変換
+    m, s = divmod(seconds, 60)  # 秒を60で割った答えがm(分), 余りがs(秒)
+    h, m = divmod(m, 60)  # 分を60で割った答えがh(時), 余りがm(分)
+    return datetime.time(hour=int(h), minute=int(m))
+
+
+def __calc_over_time(fixed_times: List[FixedTime], record: TimeRecord) -> datetime.time:
+    """
+    残業時間を算出します。
+
+    :param fixed_times: 所定時間リスト
+    :type fixed_times: List[FixedTime]
+    :param record: TimeRecordエンティティ
+    :type record: TimeRecord
+    :return: 残業時間
+    :rtype: datetime.time
+    """
+    dt2: datetime = datetime.datetime.combine(record.date, record.end_time)
+    seconds: float = 0
+
+    # 所定時間を超える部分の時間を算出
+    for fixed_time in fixed_times:
+        ft2: datetime = datetime.datetime.combine(record.date, fixed_time.end_time)
+        if ft2 < dt2:
+            seconds: float = (dt2 - ft2).total_seconds()
+        break
+
+    m, s = divmod(seconds, 60)  # 秒を60で割った答えがm(分), 余りがs(秒)
+    h, m = divmod(m, 60)  # 分を60で割った答えがh(時), 余りがm(分)
+    return datetime.time(hour=int(h), minute=int(m))
+
+
 def __time_record_to_result(user: str, record: TimeRecord) -> dict:
     """
     TimeRecordエンティティを辞書型オブジェクトに変換します。
 
+    :param user: ユーザID
+    :param user: str
     :param record: TimeRecordエンティティ
     :type record: TimeRecord
     :return: 勤怠記録情報を表す辞書型オブジェクト
@@ -226,26 +284,19 @@ def __time_record_to_result(user: str, record: TimeRecord) -> dict:
                 BreakTime.customer == record.customer
             ).all()
 
-            # 休憩時間を考慮しない稼働時間を算出
-            dt1: datetime = datetime.datetime.combine(record.date, record.start_time)
-            dt2: datetime = datetime.datetime.combine(record.date, record.end_time)
-            seconds: float = (dt2 - dt1).total_seconds()
+            # 指定された客先の所定時間リストを取得
+            fixed_times: List[FixedTime] = session.query(FixedTime).filter(
+                FixedTime.user == user,
+                FixedTime.year == record.date.year,
+                FixedTime.month == record.date.month,
+                FixedTime.customer == record.customer
+            ).all()
 
-            # 稼働時間から休憩時間を控除
-            for break_time in break_times:
-                bt1: datetime = datetime.datetime.combine(record.date, break_time.start_time)
-                bt2: datetime = datetime.datetime.combine(record.date, break_time.end_time)
-                if bt2 > dt1 and bt1 < dt2:
-                    start: datetime = dt1 if dt1 > bt1 else bt1
-                    end: datetime = dt2 if dt2 < bt2 else bt2
-                    seconds = seconds - (end - start).total_seconds()
-
-            # 休憩時間を控除した稼働時間をdatetime.time型に変換
-            m, s = divmod(seconds, 60)  # 秒を60で割った答えがm(分), 余りがs(秒)
-            h, m = divmod(m, 60)        # 分を60で割った答えがh(時), 余りがm(分)
-            total_time = datetime.time(hour=int(h), minute=int(m))
+            total_time = __calc_total_time(break_times, record)
+            over_time = __calc_over_time(fixed_times, record)
         else:
             total_time = None
+            over_time = None
 
         return {
             'time_record_id': record.time_record_id,
@@ -257,6 +308,7 @@ def __time_record_to_result(user: str, record: TimeRecord) -> dict:
             'start_time': '{0:%H:%M}'.format(record.start_time) if record.start_time else None,
             'end_time': '{0:%H:%M}'.format(record.end_time) if record.end_time else None,
             'total_time': '{0:%H:%M}'.format(total_time) if total_time else None,
+            'over_time': '{0:%H:%M}'.format(over_time) if over_time else None,
             'note': record.note
         }
     except Exception as e:
