@@ -42,11 +42,6 @@ def sign_in(message: Message, *something):
     :return: なし
     :rtype: None
     """
-
-    # miyamotoさんと同時運用中のみ必要
-    if 'miyamoto' == message.user['name']:
-        return
-
     date_time = dateutils.normalize_datetime(message.body['text'])
     date = date_time.date()
     time = date_time.time()
@@ -129,11 +124,6 @@ def sign_out(message: Message, *something):
     :return: なし
     :rtype: None
     """
-
-    # miyamotoさんと同時運用中のみ必要
-    if 'miyamoto' == message.user['name']:
-        return
-
     date_time = dateutils.normalize_datetime(message.body['text'])
     date = date_time.date()
     time = date_time.time()
@@ -192,11 +182,6 @@ def off(message: Message, *something):
     :return: なし
     :rtype: None
     """
-
-    # miyamotoさんと同時運用中のみ必要
-    if 'miyamoto' == message.user['name']:
-        return
-
     text = message.body['text']
     date_time = dateutils.normalize_datetime(text)
     date = date_time.date()
