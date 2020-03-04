@@ -4,14 +4,12 @@ import json
 import datetime
 import logging
 from flask_cors import CORS
-from plugins.models import engine, TimeRecord, BreakTime, FixedTime
-from sqlalchemy.orm import sessionmaker
+from plugins.models import Session, TimeRecord, BreakTime, FixedTime
 from typing import List
 
 
 module_api = Blueprint('time_records', __name__)
 CORS(module_api)
-Session = sessionmaker(bind=engine, autocommit=False, autoflush=True)
 logger = logging.getLogger('flask.app')
 
 
@@ -53,7 +51,7 @@ def delete(user: str, year: int, month: int, date: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    session: Session = Session()
+    session = Session()
     try:
         record: TimeRecord = session.query(TimeRecord).filter(
             TimeRecord.user == user,
@@ -69,7 +67,7 @@ def delete(user: str, year: int, month: int, date: int):
         session.rollback()
         logger.error(e)
     finally:
-        if session.is_active():
+        if session.is_active:
             session.commit()
         session.close()
 
@@ -90,7 +88,7 @@ def update(user: str, year: int, month: int, date: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    session: Session = Session()
+    session = Session()
     try:
         customer = request.json['customer'] if 'customer' in request.json else None
         kind = request.json['kind'] if 'kind' in request.json else None
@@ -109,7 +107,7 @@ def update(user: str, year: int, month: int, date: int):
             filtered.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
             filtered.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
             filtered.note = note
-            result = __time_record_to_result(user, filtered)
+            result = __time_record_to_result(session, user, filtered)
             return jsonify({'ok': True, 'record': result}), 200
         else:
             return jsonify({'ok': False}), 404
@@ -117,7 +115,7 @@ def update(user: str, year: int, month: int, date: int):
         session.rollback()
         logger.error(e)
     finally:
-        if session.is_active():
+        if session.is_active:
             session.commit()
         session.close()
 
@@ -138,7 +136,7 @@ def create(user: str, year: int, month: int, date: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    session: Session = Session()
+    session = Session()
     try:
         customer = request.json['customer'] if 'customer' in request.json else None
         kind = request.json['kind'] if 'kind' in request.json else None
@@ -162,13 +160,13 @@ def create(user: str, year: int, month: int, date: int):
             record.kind = kind
             session.add(record)
             session.flush()
-            result = __time_record_to_result(user, record)
+            result = __time_record_to_result(session, user, record)
             return jsonify({'ok': True, 'record': result}), 200
     except Exception as e:
         session.rollback()
         logger.error(e)
     finally:
-        if session.is_active():
+        if session.is_active:
             session.commit()
         session.close()
 
@@ -187,7 +185,7 @@ def records(user: str, year: int, month: int):
     :return: 正常時: 勤怠記録情報リスト, 異常時: JSON形式のエラーメッセージ
     :rtype: tuple[Any, int]
     """
-    session: Session = Session()
+    session = Session()
     try:
         time_records: List[TimeRecord] = session.query(TimeRecord).filter(
             TimeRecord.user == user,
@@ -197,14 +195,14 @@ def records(user: str, year: int, month: int):
 
         results = []
         for record in time_records:
-            results.append(__time_record_to_result(user, record))
+            results.append(__time_record_to_result(session, user, record))
 
         return jsonify({'ok': True, 'records': results}), 200
     except Exception as e:
         session.rollback()
         logger.error(e)
     finally:
-        if session.is_active():
+        if session.is_active:
             session.commit()
         session.close()
 
@@ -265,60 +263,53 @@ def __calc_over_time(fixed_times: List[FixedTime], record: TimeRecord) -> dateti
     return datetime.time(hour=int(h), minute=int(m))
 
 
-def __time_record_to_result(user: str, record: TimeRecord) -> dict:
+def __time_record_to_result(session, user: str, record: TimeRecord) -> dict:
     """
     TimeRecordエンティティを辞書型オブジェクトに変換します。
 
+    :param session: DBセッション
+    :type session: Any
     :param user: ユーザID
-    :param user: str
+    :type user: str
     :param record: TimeRecordエンティティ
     :type record: TimeRecord
     :return: 勤怠記録情報を表す辞書型オブジェクト
     :rtype: dict
     """
-    session: Session = Session()
-    try:
-        if record.start_time and record.end_time:
+    if record.start_time and record.end_time:
 
-            # 指定された客先の休憩時間リストを取得
-            break_times: List[BreakTime] = session.query(BreakTime).filter(
-                BreakTime.user == user,
-                BreakTime.year == record.date.year,
-                BreakTime.month == record.date.month,
-                BreakTime.customer == record.customer
-            ).all()
+        # 指定された客先の休憩時間リストを取得
+        break_times: List[BreakTime] = session.query(BreakTime).filter(
+            BreakTime.user == user,
+            BreakTime.year == record.date.year,
+            BreakTime.month == record.date.month,
+            BreakTime.customer == record.customer
+        ).all()
 
-            # 指定された客先の所定時間リストを取得
-            fixed_times: List[FixedTime] = session.query(FixedTime).filter(
-                FixedTime.user == user,
-                FixedTime.year == record.date.year,
-                FixedTime.month == record.date.month,
-                FixedTime.customer == record.customer
-            ).all()
+        # 指定された客先の所定時間リストを取得
+        fixed_times: List[FixedTime] = session.query(FixedTime).filter(
+            FixedTime.user == user,
+            FixedTime.year == record.date.year,
+            FixedTime.month == record.date.month,
+            FixedTime.customer == record.customer
+        ).all()
 
-            total_time = __calc_total_time(break_times, record)
-            over_time = __calc_over_time(fixed_times, record)
-        else:
-            total_time = None
-            over_time = None
+        total_time = __calc_total_time(break_times, record)
+        over_time = __calc_over_time(fixed_times, record)
+    else:
+        total_time = None
+        over_time = None
 
-        return {
-            'time_record_id': record.time_record_id,
-            'year': record.date.year,
-            'month': record.date.month,
-            'date': record.date.day,
-            'customer': record.customer,
-            'kind': record.kind,
-            'start_time': '{0:%H:%M}'.format(record.start_time) if record.start_time else None,
-            'end_time': '{0:%H:%M}'.format(record.end_time) if record.end_time else None,
-            'total_time': '{0:%H:%M}'.format(total_time) if total_time else None,
-            'over_time': '{0:%H:%M}'.format(over_time) if over_time else None,
-            'note': record.note
-        }
-    except Exception as e:
-        session.rollback()
-        logger.error(e)
-    finally:
-        if session.is_active():
-            session.commit()
-        session.close()
+    return {
+        'time_record_id': record.time_record_id,
+        'year': record.date.year,
+        'month': record.date.month,
+        'date': record.date.day,
+        'customer': record.customer,
+        'kind': record.kind,
+        'start_time': '{0:%H:%M}'.format(record.start_time) if record.start_time else None,
+        'end_time': '{0:%H:%M}'.format(record.end_time) if record.end_time else None,
+        'total_time': '{0:%H:%M}'.format(total_time) if total_time else None,
+        'over_time': '{0:%H:%M}'.format(over_time) if over_time else None,
+        'note': record.note
+    }

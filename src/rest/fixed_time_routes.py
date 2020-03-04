@@ -4,14 +4,12 @@ import json
 import datetime
 import logging
 from flask_cors import CORS
-from plugins.models import engine, FixedTime
-from sqlalchemy.orm import sessionmaker
+from plugins.models import Session, FixedTime
 from typing import List
 
 
 module_api = Blueprint('fixed_times', __name__)
 CORS(module_api)
-Session = sessionmaker(bind=engine, autocommit=False, autoflush=True)
 logger = logging.getLogger('flask.app')
 
 
@@ -47,7 +45,7 @@ def create(user: str):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    session: Session = Session()
+    session = Session()
     try:
         year = request.json['year'] if 'year' in request.json else None
         month = request.json['month'] if 'month' in request.json else None
@@ -71,7 +69,7 @@ def create(user: str):
         session.rollback()
         logger.error(e)
     finally:
-        if session.is_active():
+        if session.is_active:
             session.commit()
         session.close()
 
@@ -88,7 +86,7 @@ def update(user: str, fixed_time_id: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    session: Session = Session()
+    session = Session()
     try:
         year = request.json['year'] if 'year' in request.json else None
         month = request.json['month'] if 'month' in request.json else None
@@ -115,7 +113,7 @@ def update(user: str, fixed_time_id: int):
         session.rollback()
         logger.error(e)
     finally:
-        if session.is_active():
+        if session.is_active:
             session.commit()
         session.close()
 
@@ -132,7 +130,7 @@ def delete(user: str, fixed_time_id: int):
     :return: JSON形式のメッセージ
     :rtype: tuple[Any, int]
     """
-    session: Session = Session()
+    session = Session()
     try:
         record: FixedTime = session.query(FixedTime).filter(
             FixedTime.fixed_time_id == fixed_time_id,
@@ -148,7 +146,8 @@ def delete(user: str, fixed_time_id: int):
         session.rollback()
         logger.error(e)
     finally:
-        session.commit()
+        if session.is_active:
+            session.commit()
         session.close()
 
 
@@ -162,7 +161,7 @@ def records(user: str):
     :return: 所定時間情報リスト
     :rtype: tuple[Any, int]
     """
-    session: Session = Session()
+    session = Session()
     try:
         break_times: List[FixedTime] = session.query(FixedTime).filter(
             FixedTime.user == user
@@ -177,7 +176,7 @@ def records(user: str):
         session.rollback()
         logger.error(e)
     finally:
-        if session.is_active():
+        if session.is_active:
             session.commit()
         session.close()
 

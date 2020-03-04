@@ -4,9 +4,12 @@ import datetime
 from sqlalchemy import exc, event
 from sqlalchemy.pool import Pool
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
 
 Base = declarative_base()
 engine = sa.create_engine(os.environ.get('DATABASE_URL'))
+Session = sessionmaker(bind=engine, autocommit=False, autoflush=True)
 
 
 @event.listens_for(Pool, 'checkout')

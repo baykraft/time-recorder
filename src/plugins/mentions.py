@@ -1,12 +1,9 @@
 from slackbot.bot import listen_to
 
 from plugins import dateutils, stringutils
-from plugins.models import engine, TimeRecord
-from sqlalchemy.orm import sessionmaker
+from plugins.models import Session, TimeRecord
 import re
 import logging
-
-Session = sessionmaker(bind=engine, autocommit=False, autoflush=True)
 
 
 @listen_to(r'(モ[ー〜]+ニン|も[ー〜]+にん|おっは|おは|へろ|はろ|ヘロ|ハロ|hi|hello|morning|出勤)')
@@ -68,7 +65,7 @@ def sign_in(message, *something):
         session.rollback()
         logging.error(e)
     finally:
-        if session.is_active():
+        if session.is_active:
             session.commit()
         session.close()
 
@@ -148,7 +145,7 @@ def sign_out(message, *something):
         session.rollback()
         logging.error(e)
     finally:
-        if session.is_active():
+        if session.is_active:
             session.commit()
         session.close()
 
@@ -221,6 +218,6 @@ def off(message, *something):
         session.rollback()
         logging.error(e)
     finally:
-        if session.is_active():
+        if session.is_active:
             session.commit()
         session.close()
