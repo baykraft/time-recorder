@@ -1,5 +1,6 @@
 from slackbot.bot import listen_to
 from slackbot.dispatcher import Message
+from sqlalchemy import desc
 
 from plugins import dateutils, stringutils
 from plugins.models import Session, TimeRecord
@@ -56,6 +57,11 @@ def sign_in(message: Message, *something):
             filtered.start_time = time
         else:
             record: TimeRecord = TimeRecord(user, date)
+            latest: TimeRecord = session.query(TimeRecord).filter(
+                TimeRecord.user == user
+            ).order_by(desc(TimeRecord.date)).first()
+            if latest:
+                record.customer = latest.customer
             record.start_time = time
             session.add(record)
 
@@ -131,11 +137,18 @@ def sign_out(message: Message, *something):
 
     session = Session()
     try:
-        filtered: TimeRecord = session.query(TimeRecord).filter(TimeRecord.user == user, TimeRecord.date == date).first()
+        filtered: TimeRecord = session.query(TimeRecord).filter(
+            TimeRecord.user == user,
+            TimeRecord.date == date).first()
         if filtered:
             filtered.end_time = time
         else:
             record: TimeRecord = TimeRecord(user, date)
+            latest: TimeRecord = session.query(TimeRecord).filter(
+                TimeRecord.user == user
+            ).order_by(desc(TimeRecord.date)).first()
+            if latest:
+                record.customer = latest.customer
             record.end_time = time
             session.add(record)
 
@@ -206,6 +219,11 @@ def off(message: Message, *something):
             filtered.note = note
         else:
             record: TimeRecord = TimeRecord(user, date)
+            latest: TimeRecord = session.query(TimeRecord).filter(
+                TimeRecord.user == user
+            ).order_by(desc(TimeRecord.date)).first()
+            if latest:
+                record.customer = latest.customer
             record.start_time = None
             record.end_time = None
             record.kind = 10  # 有休
