@@ -7,7 +7,6 @@ from flask_cors import CORS
 from plugins.models import Session, TimeRecord, BreakTime, FixedTime
 from typing import List
 
-
 module_api = Blueprint('time_records', __name__)
 CORS(module_api)
 logger = logging.getLogger('flask.app')
@@ -65,7 +64,7 @@ def delete(user: str, year: int, month: int, date: int):
             return jsonify({'ok': False}), 404
     except Exception as e:
         session.rollback()
-        logger.error(e)
+        logger.error(e, exc_info=True)
     finally:
         if session.is_active:
             session.commit()
@@ -107,13 +106,27 @@ def update(user: str, year: int, month: int, date: int):
             filtered.start_time = datetime.datetime.strptime(start_time, '%H:%M').time() if start_time else None
             filtered.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
             filtered.note = note
-            result = __time_record_to_result(session, user, filtered)
+
+            # 祝日を取得
+            holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
+            if 200 == holiday_response.status_code:
+                japanese_holidays = holiday_response.json()
+            else:
+                japanese_holidays = {}
+
+            date = datetime.date(year=filtered.date.year, month=filtered.date.month, day=filtered.date.day)
+            day = date.weekday()  # 0:月～6:日
+            holiday_key = '{0:%Y-%m-%d}'.format(date)
+            holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
+            holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
+            result = __time_record_to_result(session, user, date, holiday, holiday_note, filtered)
+
             return jsonify({'ok': True, 'record': result}), 200
         else:
             return jsonify({'ok': False}), 404
     except Exception as e:
         session.rollback()
-        logger.error(e)
+        logger.error(e, exc_info=True)
     finally:
         if session.is_active:
             session.commit()
@@ -160,11 +173,25 @@ def create(user: str, year: int, month: int, date: int):
             record.kind = kind
             session.add(record)
             session.flush()
-            result = __time_record_to_result(session, user, record)
-            return jsonify({'ok': True, 'record': result}), 200
+
+            # 祝日を取得
+            holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
+            if 200 == holiday_response.status_code:
+                japanese_holidays = holiday_response.json()
+            else:
+                japanese_holidays = {}
+
+            date = datetime.date(year=record.date.year, month=record.date.month, day=record.date.day)
+            day = date.weekday()  # 0:月～6:日
+            holiday_key = '{0:%Y-%m-%d}'.format(date)
+            holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
+            holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
+            result = __time_record_to_result(session, user, date, holiday, holiday_note, record)
+
+            return jsonify({'ok': True, 'record': result}), 201
     except Exception as e:
         session.rollback()
-        logger.error(e)
+        logger.error(e, exc_info=True)
     finally:
         if session.is_active:
             session.commit()
@@ -193,14 +220,30 @@ def records(user: str, year: int, month: int):
             TimeRecord.date < datetime.date(year, month + 1, 1)
         ).all()
 
+        # 祝日を取得
+        holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
+        if 200 == holiday_response.status_code:
+            japanese_holidays = holiday_response.json()
+        else:
+            japanese_holidays = {}
+
         results = []
-        for record in time_records:
-            results.append(__time_record_to_result(session, user, record))
+        date = datetime.date(year, month, 1)
+        while month == date.month:
+            day = date.weekday()  # 0:月～6:日
+            holiday_key = '{0:%Y-%m-%d}'.format(date)
+            holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
+            target_record = next(
+                filter(lambda r: r.date.year == year and r.date.month == month and r.date.day == date.day,
+                       time_records), None)
+            holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
+            results.append(__time_record_to_result(session, user, date, holiday, holiday_note, target_record))
+            date = date + datetime.timedelta(days=1)
 
         return jsonify({'ok': True, 'records': results}), 200
     except Exception as e:
         session.rollback()
-        logger.error(e)
+        logger.error(e, exc_info=True)
     finally:
         if session.is_active:
             session.commit()
@@ -263,7 +306,8 @@ def __calc_over_time(fixed_times: List[FixedTime], record: TimeRecord) -> dateti
     return datetime.time(hour=int(h), minute=int(m))
 
 
-def __time_record_to_result(session, user: str, record: TimeRecord) -> dict:
+def __time_record_to_result(
+        session, user: str, date: datetime.date, holiday: bool, holiday_note: str, record: TimeRecord) -> dict:
     """
     TimeRecordエンティティを辞書型オブジェクトに変換します。
 
@@ -271,12 +315,18 @@ def __time_record_to_result(session, user: str, record: TimeRecord) -> dict:
     :type session: Any
     :param user: ユーザID
     :type user: str
+    :param date: 日付
+    :type date: datetime.date
+    :param holiday: 祝日フラグ
+    :type holiday: bool
+    :param holiday_note: 祝日ノート
+    :type holiday_note: str
     :param record: TimeRecordエンティティ
     :type record: TimeRecord
     :return: 勤怠記録情報を表す辞書型オブジェクト
     :rtype: dict
     """
-    if record.start_time and record.end_time:
+    if record and record.start_time and record.end_time:
 
         # 指定された客先の休憩時間リストを取得
         break_times: List[BreakTime] = session.query(BreakTime).filter(
@@ -301,15 +351,17 @@ def __time_record_to_result(session, user: str, record: TimeRecord) -> dict:
         over_time = None
 
     return {
-        'time_record_id': record.time_record_id,
-        'year': record.date.year,
-        'month': record.date.month,
-        'date': record.date.day,
-        'customer': record.customer,
-        'kind': record.kind,
-        'start_time': '{0:%H:%M}'.format(record.start_time) if record.start_time else None,
-        'end_time': '{0:%H:%M}'.format(record.end_time) if record.end_time else None,
+        'time_record_id': record.time_record_id if record else 0,
+        'year': record.date.year if record else date.year,
+        'month': record.date.month if record else date.month,
+        'date': record.date.day if record else date.day,
+        'day': date.weekday(),
+        'holiday': holiday,
+        'customer': record.customer if record else None,
+        'kind': record.kind if record else 0,
+        'start_time': '{0:%H:%M}'.format(record.start_time) if record and record.start_time else None,
+        'end_time': '{0:%H:%M}'.format(record.end_time) if record and record.end_time else None,
         'total_time': '{0:%H:%M}'.format(total_time) if total_time else None,
         'over_time': '{0:%H:%M}'.format(over_time) if over_time else None,
-        'note': record.note
+        'note': record.note if record else holiday_note
     }

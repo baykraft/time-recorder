@@ -64,10 +64,10 @@ def create(user: str):
         session.flush()
         result = __fixed_time_to_result(record)
 
-        return jsonify({'ok': True, 'record': result}), 200
+        return jsonify({'ok': True, 'record': result}), 201
     except Exception as e:
         session.rollback()
-        logger.error(e)
+        logger.error(e, exc_info=True)
     finally:
         if session.is_active:
             session.commit()
@@ -111,7 +111,7 @@ def update(user: str, fixed_time_id: int):
             return jsonify({'ok': False}), 404
     except Exception as e:
         session.rollback()
-        logger.error(e)
+        logger.error(e, exc_info=True)
     finally:
         if session.is_active:
             session.commit()
@@ -144,7 +144,7 @@ def delete(user: str, fixed_time_id: int):
             return jsonify({'ok': False}), 404
     except Exception as e:
         session.rollback()
-        logger.error(e)
+        logger.error(e, exc_info=True)
     finally:
         if session.is_active:
             session.commit()
@@ -174,7 +174,7 @@ def records(user: str):
         return jsonify({'ok': True, 'records': results}), 200
     except Exception as e:
         session.rollback()
-        logger.error(e)
+        logger.error(e, exc_info=True)
     finally:
         if session.is_active:
             session.commit()
