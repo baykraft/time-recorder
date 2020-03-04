@@ -1,4 +1,5 @@
 from slackbot.bot import listen_to
+from slackbot.dispatcher import Message
 
 from plugins import dateutils, stringutils
 from plugins.models import Session, TimeRecord
@@ -7,7 +8,7 @@ import logging
 
 
 @listen_to(r'(モ[ー〜]+ニン|も[ー〜]+にん|おっは|おは|へろ|はろ|ヘロ|ハロ|hi|hello|morning|出勤)')
-def sign_in(message, *something):
+def sign_in(message: Message, *something):
     """
     出勤メッセージ受信サービスです。
     以下のようなメッセージに反応します。
@@ -35,12 +36,17 @@ def sign_in(message, *something):
         おはようございます
 
     :param message: メッセージオブジェクト
-    :type message: slackbot.dispatcher.Message
+    :type message: Message
     :param something: メッセージタプル
     :type something: tuple
     :return: なし
     :rtype: None
     """
+
+    # miyamotoさんと同時運用中のみ必要
+    if 'miyamoto' == message.user['name']:
+        return
+
     date_time = dateutils.normalize_datetime(message.body['text'])
     date = date_time.date()
     time = date_time.time()
@@ -71,7 +77,7 @@ def sign_in(message, *something):
 
 
 @listen_to(r'(バ[ー〜ァ]*イ|ば[ー〜ぁ]*い|おやすみ|お[つっ]ー|おつ|さらば|お先|お疲|帰|乙|bye|night|(c|see)\s*(u|you)|退勤|ごきげんよ|グ[ッ]?バイ|さようなら)')
-def sign_out(message, *something):
+def sign_out(message: Message, *something):
     """
     退勤メッセージ受信サービスです。
     以下のようなメッセージに反応します。
@@ -117,12 +123,17 @@ def sign_out(message, *something):
         お疲れ様でした
 
     :param message: メッセージオブジェクト
-    :type message: slackbot.dispatcher.Message
+    :type message: Message
     :param something: メッセージタプル
     :type something: tuple
     :return: なし
     :rtype: None
     """
+
+    # miyamotoさんと同時運用中のみ必要
+    if 'miyamoto' == message.user['name']:
+        return
+
     date_time = dateutils.normalize_datetime(message.body['text'])
     date = date_time.date()
     time = date_time.time()
@@ -151,7 +162,7 @@ def sign_out(message, *something):
 
 
 @listen_to(r'(休|やす(ま|み|む)|休暇)')
-def off(message, *something):
+def off(message: Message, *something):
     """
     休暇メッセージ受信サービスです。
     以下のようなメッセージに反応します。
@@ -175,12 +186,17 @@ def off(message, *something):
         休み "ここがメモとして記録される"
 
     :param message: メッセージオブジェクト
-    :type message: slackbot.dispatcher.Message
+    :type message: Message
     :param something: メッセージタプル
     :type something: tuple
     :return: なし
     :rtype: None
     """
+
+    # miyamotoさんと同時運用中のみ必要
+    if 'miyamoto' == message.user['name']:
+        return
+
     text = message.body['text']
     date_time = dateutils.normalize_datetime(text)
     date = date_time.date()
