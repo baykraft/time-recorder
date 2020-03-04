@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
 import requests
 import json
 import datetime
@@ -6,6 +6,8 @@ import logging
 from flask_cors import CORS
 from plugins.models import Session, TimeRecord, BreakTime, FixedTime
 from typing import List
+from openpyxl import load_workbook
+from openpyxl.writer.excel import save_virtual_workbook
 
 module_api = Blueprint('time_records', __name__)
 CORS(module_api)
@@ -248,6 +250,100 @@ def records(user: str, year: int, month: int):
         if session.is_active:
             session.commit()
         session.close()
+
+
+@module_api.route('/<int:year>/<int:month>/download', methods=['GET'])
+def download(user: str, year: int, month: int):
+    """
+    勤怠記録をExcelファイルでダウンロードします。
+
+    :param user: ユーザID
+    :type user: str
+    :param year: 年
+    :type year: int
+    :param month: 月
+    :type month: int
+    :return: Excelファイル
+    :rtype: Any
+    """
+    session = Session()
+    try:
+        time_records: List[TimeRecord] = session.query(TimeRecord).filter(
+            TimeRecord.user == user,
+            TimeRecord.date >= datetime.date(year, month, 1),
+            TimeRecord.date < datetime.date(year, month + 1, 1)
+        ).all()
+
+        # 祝日を取得
+        holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
+        if 200 == holiday_response.status_code:
+            japanese_holidays = holiday_response.json()
+        else:
+            japanese_holidays = {}
+
+        # 日付毎の勤怠記録を生成
+        results = []
+        date = datetime.date(year, month, 1)
+        while month == date.month:
+            day = date.weekday()  # 0:月～6:日
+            holiday_key = '{0:%Y-%m-%d}'.format(date)
+            holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
+            target_record = next(
+                filter(lambda r: r.date.year == year and r.date.month == month and r.date.day == date.day,
+                       time_records), None)
+            holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
+            results.append(__time_record_to_result(session, user, date, holiday, holiday_note, target_record))
+            date = date + datetime.timedelta(days=1)
+
+        # Excelとして出力
+        wb = load_workbook('resources/template.xlsx')
+        ws = wb['勤怠']
+        row_index = 2
+        day_of_week = '月', '火', '水', '木', '金', '土', '日'
+        kind = {
+            '0': '',
+            '10': '有休', '11': '有休(AM)', '12': '有休(PM)',
+            '20': '欠勤', '21': '欠勤(AM)', '22': '欠勤(PM)',
+            '30': '特休', '31': '特休(AM)', '32': '特休(PM)',
+            '40': '代休', '41': '代休(AM)', '42': '代休(PM)',
+            '50': '休出'
+        }
+        for result in results:
+            ws.cell(row=row_index, column=1).value = result['date']
+            ws.cell(row=row_index, column=2).value = day_of_week[result['day']]
+            ws.cell(row=row_index, column=3).value = 'H' if result['holiday'] else None
+            ws.cell(row=row_index, column=4).value = result['customer']
+            ws.cell(row=row_index, column=5).value = kind[str(result['kind'])]
+            ws.cell(row=row_index, column=6).value = __to_time(result['start_time'])
+            ws.cell(row=row_index, column=7).value = __to_time(result['end_time'])
+            ws.cell(row=row_index, column=8).value = __to_time(result['total_time'])
+            ws.cell(row=row_index, column=9).value = result['note']
+            row_index += 1
+
+        res = make_response(save_virtual_workbook(wb))
+        res.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        res.headers['Content-Disposition'] = 'attachment; filename=sample.xlsx'
+        return res
+    except Exception as e:
+        session.rollback()
+        logger.error(e, exc_info=True)
+    finally:
+        if session.is_active:
+            session.commit()
+        session.close()
+
+
+def __to_time(time: str) -> datetime.time:
+    """
+    時間文字列をdatetime.timeオブジェクトに変換します。
+
+    :param time: 時間文字列
+    :type time: str
+    :return: datetime.timeオブジェクト
+    :rtype: datetime.time
+    """
+    if time:
+        return datetime.datetime.strptime(time, '%H:%M').time()
 
 
 def __calc_total_time(break_times: List[BreakTime], record: TimeRecord) -> datetime.time:
