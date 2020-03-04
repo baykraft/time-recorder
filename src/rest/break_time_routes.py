@@ -151,20 +151,26 @@ def delete(user: str, break_time_id: int):
         session.close()
 
 
-@module_api.route('', methods=['GET'])
-def records(user: str):
+@module_api.route('/<int:year>/<int:month>', methods=['GET'])
+def records(user: str, year: int, month: int):
     """
     休憩時間情報リストを取得します。
 
     :param user: ユーザID
     :type user: str
+    :param year: 年
+    :type year: int
+    :param month: 月
+    :type month: int
     :return: 休憩時間情報リスト
     :rtype: tuple[Any, int]
     """
     session = Session()
     try:
         break_times: List[BreakTime] = session.query(BreakTime).filter(
-            BreakTime.user == user
+            BreakTime.user == user,
+            BreakTime.year == year,
+            BreakTime.month == month
         ).all()
 
         results = []
@@ -172,6 +178,62 @@ def records(user: str):
             results.append(__break_time_to_result(record))
 
         return jsonify({'ok': True, 'records': results}), 200
+    except Exception as e:
+        session.rollback()
+        logger.error(e, exc_info=True)
+    finally:
+        if session.is_active:
+            session.commit()
+        session.close()
+
+
+@module_api.route('/copy', methods=['POST'])
+def copy(user: str):
+    """
+    指定年月の休憩時間情報をコピーします。
+
+    :param user: ユーザID
+    :type user: str
+    :return: コピーした休憩時間情報リスト
+    :rtype: tuple[Any, int]
+    """
+    session = Session()
+    try:
+        from_year = request.json['from_year'] if 'from_year' in request.json else None
+        from_month = request.json['from_month'] if 'from_month' in request.json else None
+        to_year = request.json['to_year'] if 'to_year' in request.json else None
+        to_month = request.json['to_month'] if 'to_month' in request.json else None
+
+        break_times: List[BreakTime] = session.query(BreakTime).filter(
+            BreakTime.user == user,
+            BreakTime.year == from_year,
+            BreakTime.month == from_month
+        ).all()
+
+        for break_time in break_times:
+            record: BreakTime = BreakTime(
+                break_time.user,
+                to_year,
+                to_month,
+                break_time.customer,
+                break_time.start_time,
+                break_time.end_time
+            )
+            session.add(record)
+
+        session.flush()
+        break_times: List[BreakTime] = session.query(BreakTime).filter(
+            BreakTime.user == user,
+            BreakTime.year == to_year,
+            BreakTime.month == to_month
+        ).all()
+
+        results = []
+        for break_time in break_times:
+            results.append(__break_time_to_result(break_time))
+
+        return jsonify({'ok': True, 'records': results}), 200
+
     except Exception as e:
         session.rollback()
         logger.error(e, exc_info=True)
