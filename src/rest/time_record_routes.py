@@ -333,6 +333,71 @@ def download(user: str, year: int, month: int):
         session.close()
 
 
+@module_api.route('/<int:year>/<int:month>/summary', methods=['GET'])
+def summary(user: str, year: int, month: int):
+    """
+    勤怠記録の要約情報を取得します。
+
+    :param user: ユーザID
+    :type user: str
+    :param year: 年
+    :type year: int
+    :param month: 月
+    :type month: int
+    :return: 要約情報
+    :rtype: tuple[Any, int]
+    """
+    session = Session()
+    try:
+        time_records: List[TimeRecord] = session.query(TimeRecord).filter(
+            TimeRecord.user == user,
+            TimeRecord.date >= datetime.date(year, month, 1),
+            TimeRecord.date < datetime.date(year, month + 1, 1)
+        ).all()
+
+        # 祝日を取得
+        holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
+        if 200 == holiday_response.status_code:
+            japanese_holidays = holiday_response.json()
+        else:
+            japanese_holidays = {}
+
+        results = []
+        date = datetime.date(year, month, 1)
+        while month == date.month:
+            day = date.weekday()  # 0:月～6:日
+            holiday_key = '{0:%Y-%m-%d}'.format(date)
+            holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
+            target_record = next(
+                filter(lambda r: r.date.year == year and r.date.month == month and r.date.day == date.day,
+                       time_records), None)
+            holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
+            results.append(__time_record_to_result(session, user, date, holiday, holiday_note, target_record))
+            date = date + datetime.timedelta(days=1)
+
+        # 実働時間算出
+        hour = 0
+        minute = 0
+        total_times: List[str] = list(map(lambda r: r['total_time'], results))
+        for total_time in total_times:
+            if total_time:
+                hour += int(total_time.split(':')[0])
+                minute += int(total_time.split(':')[1])
+        h, m = divmod(minute, 60)
+        hour += h
+        minute = m
+        actual_time = f'{hour}:{str(minute).zfill(2)}'
+
+        return jsonify({'ok': True, 'actual_time': actual_time}), 200
+    except Exception as e:
+        session.rollback()
+        logger.error(e, exc_info=True)
+    finally:
+        if session.is_active:
+            session.commit()
+        session.close()
+
+
 def __to_time(time: str) -> datetime.time:
     """
     時間文字列をdatetime.timeオブジェクトに変換します。
