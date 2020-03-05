@@ -151,27 +151,89 @@ def delete(user: str, fixed_time_id: int):
         session.close()
 
 
-@module_api.route('', methods=['GET'])
-def records(user: str):
+@module_api.route('/<int:year>/<int:month>', methods=['GET'])
+def records(user: str, year: int, month: int):
     """
     所定時間情報リストを取得します。
 
     :param user: ユーザID
     :type user: str
+    :param year: 年
+    :type year: int
+    :param month: 月
+    :type month: int
     :return: 所定時間情報リスト
     :rtype: tuple[Any, int]
     """
     session = Session()
     try:
-        break_times: List[FixedTime] = session.query(FixedTime).filter(
-            FixedTime.user == user
+        fixed_times: List[FixedTime] = session.query(FixedTime).filter(
+            FixedTime.user == user,
+            FixedTime.year == year,
+            FixedTime.month == month
         ).all()
 
         results = []
-        for record in break_times:
+        for record in fixed_times:
             results.append(__fixed_time_to_result(record))
 
         return jsonify({'ok': True, 'records': results}), 200
+    except Exception as e:
+        session.rollback()
+        logger.error(e, exc_info=True)
+    finally:
+        if session.is_active:
+            session.commit()
+        session.close()
+
+
+@module_api.route('/copy', methods=['POST'])
+def copy(user: str):
+    """
+    指定年月の所定時間情報をコピーします。
+
+    :param user: ユーザID
+    :type user: str
+    :return: コピーした所定時間情報リスト
+    :rtype: tuple[Any, int]
+    """
+    session = Session()
+    try:
+        from_year = request.json['from_year'] if 'from_year' in request.json else None
+        from_month = request.json['from_month'] if 'from_month' in request.json else None
+        to_year = request.json['to_year'] if 'to_year' in request.json else None
+        to_month = request.json['to_month'] if 'to_month' in request.json else None
+
+        fixed_times: List[FixedTime] = session.query(FixedTime).filter(
+            FixedTime.user == user,
+            FixedTime.year == from_year,
+            FixedTime.month == from_month
+        ).all()
+
+        for fixed_time in fixed_times:
+            record: FixedTime = FixedTime(
+                fixed_time.user,
+                to_year,
+                to_month,
+                fixed_time.customer,
+                fixed_time.start_time,
+                fixed_time.end_time
+            )
+            session.add(record)
+
+        session.flush()
+        fixed_times: List[FixedTime] = session.query(FixedTime).filter(
+            FixedTime.user == user,
+            FixedTime.year == to_year,
+            FixedTime.month == to_month
+        ).all()
+
+        results = []
+        for fixed_time in fixed_times:
+            results.append(__fixed_time_to_result(fixed_time))
+
+        return jsonify({'ok': True, 'records': results}), 200
+
     except Exception as e:
         session.rollback()
         logger.error(e, exc_info=True)
