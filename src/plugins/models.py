@@ -120,4 +120,20 @@ class FixedTime(Base):
             self.fixed_time_id, self.user, self.year, self.month, self.customer, self.start_time, self.end_time)
 
 
+class User(Base):
+    """
+    ユーザマスタ
+    """
+    __tablename__ = 'users'
+    user: str = sa.Column('user', sa.String(9), primary_key=True)
+    real_name: str = sa.Column('real_name', sa.String, nullable=False)
+
+    def __init__(self, user: str, real_name: str):
+        self.user = user
+        self.real_name = real_name
+
+    def __repr__(self):
+        return '<User({}, {})>'.format(self.user, self.real_name)
+
+
 Base.metadata.create_all(engine)

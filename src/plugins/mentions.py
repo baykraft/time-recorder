@@ -3,7 +3,7 @@ from slackbot.dispatcher import Message
 from sqlalchemy import desc
 
 from plugins import dateutils, stringutils
-from plugins.models import Session, TimeRecord
+from plugins.models import Session, TimeRecord, User
 import re
 import logging
 
@@ -50,6 +50,16 @@ def sign_in(message: Message, *something):
 
     session = Session()
     try:
+        # ユーザ情報を登録
+        user_record: User = session.query(User).filter(
+            User.user == user
+        ).first()
+        if user_record:
+            user_record.real_name = message.user['real_name']
+        else:
+            session.add(User(user, message.user['real_name']))
+
+        # 勤怠記録を登録
         filtered: TimeRecord = session.query(TimeRecord).filter(
             TimeRecord.user == user,
             TimeRecord.date == date).first()
@@ -137,6 +147,16 @@ def sign_out(message: Message, *something):
 
     session = Session()
     try:
+        # ユーザ情報を登録
+        user_record: User = session.query(User).filter(
+            User.user == user
+        ).first()
+        if user_record:
+            user_record.real_name = message.user['real_name']
+        else:
+            session.add(User(user, message.user['real_name']))
+
+        # 勤怠記録を登録
         filtered: TimeRecord = session.query(TimeRecord).filter(
             TimeRecord.user == user,
             TimeRecord.date == date).first()
@@ -209,6 +229,16 @@ def off(message: Message, *something):
 
     session = Session()
     try:
+        # ユーザ情報を登録
+        user_record: User = session.query(User).filter(
+            User.user == user
+        ).first()
+        if user_record:
+            user_record.real_name = message.user['real_name']
+        else:
+            session.add(User(user, message.user['real_name']))
+
+        # 勤怠記録を登録
         filtered: TimeRecord = session.query(TimeRecord).filter(
             TimeRecord.user == user,
             TimeRecord.date == date).first()
