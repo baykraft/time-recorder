@@ -246,13 +246,13 @@ def download(user: str, year: int, month: int):
             # 所定日数
             fixed_days = len(list(filter(lambda r: not r['holiday'] and ft.customer == r['customer'], results)))
             # 所定時間, 総所定時間算出
-            fixed_time = __to_time(__calc_fixed_time(break_times, ft))
-            fixed_hour = fixed_time.hour * fixed_days
-            fixed_minute = fixed_time.minute * fixed_days
+            fixed_time = __calc_fixed_time(break_times, ft)
+            fixed_hour = int(fixed_time.split(':')[0]) * fixed_days
+            fixed_minute = int(fixed_time.split(':')[1]) * fixed_days
             h, m = divmod(fixed_minute, 60)
             fixed_hour += h
             fixed_minute = m
-            sum_fixed_time = datetime.time(hour=fixed_hour, minute=fixed_minute)
+            sum_fixed_time = f'{fixed_hour}:{str(fixed_minute).zfill(2)}'
             # 実働日数
             actual_list = list(filter(lambda r: ft.customer == r['customer'], results))
             actual_days = len(actual_list)
@@ -272,7 +272,7 @@ def download(user: str, year: int, month: int):
             ws.cell(row=row_index, column=4).value = fixed_days
             ws.cell(row=row_index, column=5).value = sum_fixed_time
             ws.cell(row=row_index, column=6).value = actual_days
-            ws.cell(row=row_index, column=7).value = __to_time(actual_time)
+            ws.cell(row=row_index, column=7).value = actual_time
             row_index += 1
 
         # 残業時間算出
@@ -290,11 +290,11 @@ def download(user: str, year: int, month: int):
         # 控除時間算出
         deduction_time = __sum_times(list(map(lambda r: r['deduction_time'], results)))
 
-        ws.cell(row=9, column=10).value = __to_time(over_time)
-        ws.cell(row=9, column=11).value = __to_time(midnight_time)
-        ws.cell(row=9, column=12).value = __to_time(statutory_time)
-        ws.cell(row=9, column=13).value = __to_time(statutory_midnight_time)
-        ws.cell(row=9, column=15).value = __to_time(deduction_time)
+        ws.cell(row=9, column=10).value = over_time
+        ws.cell(row=9, column=11).value = midnight_time
+        ws.cell(row=9, column=12).value = statutory_time
+        ws.cell(row=9, column=13).value = statutory_midnight_time
+        ws.cell(row=9, column=15).value = deduction_time
 
         row_index = 12
         day_of_week = '月', '火', '水', '木', '金', '土', '日'
@@ -312,12 +312,12 @@ def download(user: str, year: int, month: int):
             ws.cell(row=row_index, column=4).value = 'H' if result['holiday'] else None
             ws.cell(row=row_index, column=5).value = result['customer']
             ws.cell(row=row_index, column=6).value = kind[str(result['kind'])]
-            ws.cell(row=row_index, column=7).value = __to_time(result['start_time'])
-            ws.cell(row=row_index, column=8).value = __to_time(result['end_time'])
-            ws.cell(row=row_index, column=9).value = __to_time(result['total_time'])
-            ws.cell(row=row_index, column=10).value = __to_time(result['over_time'])
-            ws.cell(row=row_index, column=11).value = __to_time(result['midnight_time'])
-            ws.cell(row=row_index, column=12).value = __to_time(result['deduction_time'])
+            ws.cell(row=row_index, column=7).value = result['start_time']
+            ws.cell(row=row_index, column=8).value = result['end_time']
+            ws.cell(row=row_index, column=9).value = result['total_time']
+            ws.cell(row=row_index, column=10).value = result['over_time']
+            ws.cell(row=row_index, column=11).value = result['midnight_time']
+            ws.cell(row=row_index, column=12).value = result['deduction_time']
             ws.cell(row=row_index, column=13).value = result['note']
             row_index += 1
 
@@ -460,19 +460,6 @@ def __sum_times(times: List[str]) -> str:
     hour += h
     minute = m
     return f'{hour}:{str(minute).zfill(2)}'
-
-
-def __to_time(time: str) -> datetime.time:
-    """
-    時間文字列をdatetime.timeオブジェクトに変換します。
-
-    :param time: 時間文字列
-    :type time: str
-    :return: datetime.timeオブジェクト
-    :rtype: datetime.time
-    """
-    if time:
-        return datetime.datetime.strptime(time, '%H:%M').time()
 
 
 def __calc_fixed_time(break_times: List[BreakTime], fixed_time: FixedTime) -> str:
