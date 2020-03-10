@@ -109,17 +109,8 @@ def update(user: str, year: int, month: int, date: int):
             filtered.end_time = datetime.datetime.strptime(end_time, '%H:%M').time() if end_time else None
             filtered.note = note
 
-            # 祝日を取得
-            japanese_holidays = __get_holidays(year)
-
             date = datetime.date(year=filtered.date.year, month=filtered.date.month, day=filtered.date.day)
-            day = date.weekday()  # 0:月～6:日
-            holiday_key = '{0:%Y-%m-%d}'.format(date)
-            holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
-            statutory_holiday = (day == 6 or holiday_key in japanese_holidays)
-            holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
-            result = __time_record_to_result(session, user, date, holiday, holiday_note, statutory_holiday, filtered)
-
+            result = __time_record_to_result(session, user, date, filtered)
             return jsonify({'ok': True, 'record': result}), 200
         else:
             return jsonify({'ok': False}), 404
@@ -173,17 +164,8 @@ def create(user: str, year: int, month: int, date: int):
             session.add(record)
             session.flush()
 
-            # 祝日を取得
-            japanese_holidays = __get_holidays(year)
-
             date = datetime.date(year=record.date.year, month=record.date.month, day=record.date.day)
-            day = date.weekday()  # 0:月～6:日
-            holiday_key = '{0:%Y-%m-%d}'.format(date)
-            holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
-            statutory_holiday = (day == 6 or holiday_key in japanese_holidays)
-            holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
-            result = __time_record_to_result(session, user, date, holiday, holiday_note, statutory_holiday, record)
-
+            result = __time_record_to_result(session, user, date, record)
             return jsonify({'ok': True, 'record': result}), 201
     except Exception as e:
         session.rollback()
@@ -210,30 +192,7 @@ def records(user: str, year: int, month: int):
     """
     session = Session()
     try:
-        time_records: List[TimeRecord] = session.query(TimeRecord).filter(
-            TimeRecord.user == user,
-            TimeRecord.date >= datetime.date(year, month, 1),
-            TimeRecord.date < datetime.date(year, month + 1, 1)
-        ).all()
-
-        # 祝日を取得
-        japanese_holidays = __get_holidays(year)
-
-        results = []
-        date = datetime.date(year, month, 1)
-        while month == date.month:
-            day = date.weekday()  # 0:月～6:日
-            holiday_key = '{0:%Y-%m-%d}'.format(date)
-            holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
-            statutory_holiday = (day == 6 or holiday_key in japanese_holidays)
-            target_record = next(
-                filter(lambda r: r.date.year == year and r.date.month == month and r.date.day == date.day,
-                       time_records), None)
-            holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
-            results.append(__time_record_to_result(
-                session, user, date, holiday, holiday_note, statutory_holiday, target_record))
-            date = date + datetime.timedelta(days=1)
-
+        results = __get_time_records(session, user, year, month)
         return jsonify({'ok': True, 'records': results}), 200
     except Exception as e:
         session.rollback()
@@ -260,35 +219,84 @@ def download(user: str, year: int, month: int):
     """
     session = Session()
     try:
-        time_records: List[TimeRecord] = session.query(TimeRecord).filter(
-            TimeRecord.user == user,
-            TimeRecord.date >= datetime.date(year, month, 1),
-            TimeRecord.date < datetime.date(year, month + 1, 1)
-        ).all()
-
-        # 祝日を取得
-        japanese_holidays = __get_holidays(year)
-
-        # 日付毎の勤怠記録を生成
-        results = []
-        date = datetime.date(year, month, 1)
-        while month == date.month:
-            day = date.weekday()  # 0:月～6:日
-            holiday_key = '{0:%Y-%m-%d}'.format(date)
-            holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
-            statutory_holiday = (day == 6 or holiday_key in japanese_holidays)
-            target_record = next(
-                filter(lambda r: r.date.year == year and r.date.month == month and r.date.day == date.day,
-                       time_records), None)
-            holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
-            results.append(__time_record_to_result(
-                session, user, date, holiday, holiday_note, statutory_holiday, target_record))
-            date = date + datetime.timedelta(days=1)
-
-        # Excelとして出力
         wb = load_workbook('resources/template.xlsx')
         ws = wb['勤怠']
-        row_index = 2
+        ws.cell(row=2, column=2).value = f'{year}年{month}月'
+
+        # 日付毎の勤怠記録を生成
+        results = __get_time_records(session, user, year, month)
+
+        # 所定時間を取得
+        fixed_times: List[FixedTime] = session.query(FixedTime).filter(
+            FixedTime.user == user,
+            FixedTime.year == year,
+            FixedTime.month == month
+        ).all()
+
+        # 客先別稼働時間出力
+        row_index = 5
+        for ft in fixed_times:
+            break_times: List[BreakTime] = session.query(BreakTime).filter(
+                BreakTime.user == user,
+                BreakTime.year == year,
+                BreakTime.month == month,
+                BreakTime.customer == ft.customer
+            ).all()
+
+            # 所定日数
+            fixed_days = len(list(filter(lambda r: not r['holiday'] and ft.customer == r['customer'], results)))
+            # 所定時間, 総所定時間算出
+            fixed_time = __to_time(__calc_fixed_time(break_times, ft))
+            fixed_hour = fixed_time.hour * fixed_days
+            fixed_minute = fixed_time.minute * fixed_days
+            h, m = divmod(fixed_minute, 60)
+            fixed_hour += h
+            fixed_minute = m
+            sum_fixed_time = datetime.time(hour=fixed_hour, minute=fixed_minute)
+            # 実働日数
+            actual_list = list(filter(lambda r: ft.customer == r['customer'], results))
+            actual_days = len(actual_list)
+            one_day: tuple = 10, 20, 30, 40
+            half_day: tuple = 11, 12, 21, 22, 31, 32, 41, 42
+            for actual in actual_list:
+                kind = actual['kind']
+                if kind in one_day:
+                    actual_days -= 1
+                elif kind in half_day:
+                    actual_days -= 0.5
+            # 実働時間算出
+            actual_time = __sum_times(list(
+                map(lambda r: r['total_time'], filter(lambda r: ft.customer == r['customer'], results))))
+            ws.cell(row=row_index, column=2).value = ft.customer
+            ws.cell(row=row_index, column=3).value = fixed_time
+            ws.cell(row=row_index, column=4).value = fixed_days
+            ws.cell(row=row_index, column=5).value = sum_fixed_time
+            ws.cell(row=row_index, column=6).value = actual_days
+            ws.cell(row=row_index, column=7).value = __to_time(actual_time)
+            row_index += 1
+
+        # 残業時間算出
+        over_time = __sum_times(list(
+            map(lambda r: r['over_time'], filter(lambda r: not r['statutory_holiday'], results))))
+        # 深夜残業時間算出
+        midnight_time = __sum_times(list(
+            map(lambda r: r['midnight_time'], filter(lambda r: not r['statutory_holiday'], results))))
+        # 法休残業時間算出
+        statutory_time = __sum_times(list(
+            map(lambda r: r['over_time'], filter(lambda r: r['statutory_holiday'] and r['kind'] == 50, results))))
+        # 法休深夜残業時間算出
+        statutory_midnight_time = __sum_times(list(
+            map(lambda r: r['midnight_time'], filter(lambda r: r['statutory_holiday'] and r['kind'] == 50, results))))
+        # 控除時間算出
+        deduction_time = __sum_times(list(map(lambda r: r['deduction_time'], results)))
+
+        ws.cell(row=9, column=10).value = __to_time(over_time)
+        ws.cell(row=9, column=11).value = __to_time(midnight_time)
+        ws.cell(row=9, column=12).value = __to_time(statutory_time)
+        ws.cell(row=9, column=13).value = __to_time(statutory_midnight_time)
+        ws.cell(row=9, column=15).value = __to_time(deduction_time)
+
+        row_index = 12
         day_of_week = '月', '火', '水', '木', '金', '土', '日'
         kind = {
             '0': '',
@@ -299,15 +307,18 @@ def download(user: str, year: int, month: int):
             '50': '休出'
         }
         for result in results:
-            ws.cell(row=row_index, column=1).value = result['date']
-            ws.cell(row=row_index, column=2).value = day_of_week[result['day']]
-            ws.cell(row=row_index, column=3).value = 'H' if result['holiday'] else None
-            ws.cell(row=row_index, column=4).value = result['customer']
-            ws.cell(row=row_index, column=5).value = kind[str(result['kind'])]
-            ws.cell(row=row_index, column=6).value = __to_time(result['start_time'])
-            ws.cell(row=row_index, column=7).value = __to_time(result['end_time'])
-            ws.cell(row=row_index, column=8).value = __to_time(result['total_time'])
-            ws.cell(row=row_index, column=9).value = result['note']
+            ws.cell(row=row_index, column=2).value = result['date']
+            ws.cell(row=row_index, column=3).value = day_of_week[result['day']]
+            ws.cell(row=row_index, column=4).value = 'H' if result['holiday'] else None
+            ws.cell(row=row_index, column=5).value = result['customer']
+            ws.cell(row=row_index, column=6).value = kind[str(result['kind'])]
+            ws.cell(row=row_index, column=7).value = __to_time(result['start_time'])
+            ws.cell(row=row_index, column=8).value = __to_time(result['end_time'])
+            ws.cell(row=row_index, column=9).value = __to_time(result['total_time'])
+            ws.cell(row=row_index, column=10).value = __to_time(result['over_time'])
+            ws.cell(row=row_index, column=11).value = __to_time(result['midnight_time'])
+            ws.cell(row=row_index, column=12).value = __to_time(result['deduction_time'])
+            ws.cell(row=row_index, column=13).value = result['note']
             row_index += 1
 
         res = make_response(save_virtual_workbook(wb))
@@ -339,29 +350,7 @@ def summary(user: str, year: int, month: int):
     """
     session = Session()
     try:
-        time_records: List[TimeRecord] = session.query(TimeRecord).filter(
-            TimeRecord.user == user,
-            TimeRecord.date >= datetime.date(year, month, 1),
-            TimeRecord.date < datetime.date(year, month + 1, 1)
-        ).all()
-
-        # 祝日を取得
-        japanese_holidays = __get_holidays(year)
-
-        results = []
-        date = datetime.date(year, month, 1)
-        while month == date.month:
-            day = date.weekday()  # 0:月～6:日
-            holiday_key = '{0:%Y-%m-%d}'.format(date)
-            holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
-            statutory_holiday = (day == 6 or holiday_key in japanese_holidays)
-            target_record = next(
-                filter(lambda r: r.date.year == year and r.date.month == month and r.date.day == date.day,
-                       time_records), None)
-            holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
-            results.append(__time_record_to_result(
-                session, user, date, holiday, holiday_note, statutory_holiday, target_record))
-            date = date + datetime.timedelta(days=1)
+        results = __get_time_records(session, user, year, month)
 
         # 所定時間算出
         fixed_time = __sum_times(list(map(lambda r: r['fixed_time'], filter(lambda r: not r['holiday'], results))))
@@ -399,6 +388,41 @@ def summary(user: str, year: int, month: int):
         if session.is_active:
             session.commit()
         session.close()
+
+
+def __get_time_records(session, user: str, year: int, month: int) -> list:
+    """
+    勤怠記録の辞書型オブジェクトリストを取得します。
+
+    :param session: DBセッション
+    :type session: Any
+    :param user: ユーザID
+    :type user: str
+    :param year: 年
+    :type year: int
+    :param month: 月
+    :type month: int
+    :return: 勤怠記録の辞書型オブジェクトリスト
+    :rtype: list
+    """
+    # 勤怠記録を取得
+    time_records: List[TimeRecord] = session.query(TimeRecord).filter(
+        TimeRecord.user == user,
+        TimeRecord.date >= datetime.date(year, month, 1),
+        TimeRecord.date < datetime.date(year, month + 1, 1)
+    ).all()
+
+    # 日付毎の勤怠記録を生成
+    results = []
+    date = datetime.date(year, month, 1)
+    while month == date.month:
+        target_record = next(
+            filter(lambda r: r.date.year == year and r.date.month == month and r.date.day == date.day,
+                   time_records), None)
+        results.append(__time_record_to_result(session, user, date, target_record))
+        date = date + datetime.timedelta(days=1)
+
+    return results
 
 
 def __get_holidays(year: int) -> dict:
@@ -451,7 +475,7 @@ def __to_time(time: str) -> datetime.time:
         return datetime.datetime.strptime(time, '%H:%M').time()
 
 
-def __calc_fixed_time(break_times: List[BreakTime], fixed_time: FixedTime, record: TimeRecord) -> str:
+def __calc_fixed_time(break_times: List[BreakTime], fixed_time: FixedTime) -> str:
     """
     所定時間を算出します。
 
@@ -459,19 +483,18 @@ def __calc_fixed_time(break_times: List[BreakTime], fixed_time: FixedTime, recor
     :type break_times: List[BreakTime]
     :param fixed_time: 所定時間情報
     :type fixed_time: FixedTime
-    :param record: TimeRecordエンティティ
-    :type record: TimeRecord
     :return: 所定時間
     :rtype: str
     """
-    dt1: datetime = datetime.datetime.combine(record.date, fixed_time.start_time)
-    dt2: datetime = datetime.datetime.combine(record.date, fixed_time.end_time)
+    base_date = datetime.date(year=2020, month=1, day=1)
+    dt1: datetime = datetime.datetime.combine(base_date, fixed_time.start_time)
+    dt2: datetime = datetime.datetime.combine(base_date, fixed_time.end_time)
     seconds: float = (dt2 - dt1).total_seconds()
 
     # 所定時間から休憩時間を控除
     for break_time in break_times:
-        bt1: datetime = datetime.datetime.combine(record.date, break_time.start_time)
-        bt2: datetime = datetime.datetime.combine(record.date, break_time.end_time)
+        bt1: datetime = datetime.datetime.combine(base_date, break_time.start_time)
+        bt2: datetime = datetime.datetime.combine(base_date, break_time.end_time)
         if bt2 > dt1 and bt1 < dt2:
             start: datetime = dt1 if dt1 > bt1 else bt1
             end: datetime = dt2 if dt2 < bt2 else bt2
@@ -598,14 +621,7 @@ def __calc_deduction_time(fixed_time: str, total_time: str, over_time: str, midn
         return '0:00'
 
 
-def __time_record_to_result(
-        session,
-        user: str,
-        date: datetime.date,
-        holiday: bool,
-        holiday_note: str,
-        statutory_holiday: bool,
-        record: TimeRecord) -> dict:
+def __time_record_to_result(session, user: str, date: datetime.date, record: TimeRecord) -> dict:
     """
     TimeRecordエンティティを辞書型オブジェクトに変換します。
 
@@ -615,12 +631,6 @@ def __time_record_to_result(
     :type user: str
     :param date: 日付
     :type date: datetime.date
-    :param holiday: 休日フラグ
-    :type holiday: bool
-    :param holiday_note: 祝日ノート
-    :param statutory_holiday: 法定休日フラグ
-    :type statutory_holiday: bool
-    :type holiday_note: str
     :param record: TimeRecordエンティティ
     :type record: TimeRecord
     :return: 勤怠記録情報を表す辞書型オブジェクト
@@ -631,6 +641,13 @@ def __time_record_to_result(
     over_time = '0:00'        # 残業時間
     midnight_time = '0:00'    # 深夜残業時間
     deduction_time = '0:00'   # 控除時間
+
+    japanese_holidays = __get_holidays(date.year)
+    day = date.weekday()  # 0:月～6:日
+    holiday_key = '{0:%Y-%m-%d}'.format(date)
+    holiday = (day == 5 or day == 6 or holiday_key in japanese_holidays)
+    statutory_holiday = (day == 6 or holiday_key in japanese_holidays)
+    holiday_note = japanese_holidays[holiday_key] if holiday_key in japanese_holidays else None
 
     if record and record.start_time and record.end_time:
 
@@ -651,7 +668,7 @@ def __time_record_to_result(
         ).all()
 
         if 0 < len(fixed_times):
-            fixed_time = __calc_fixed_time(break_times, fixed_times[0], record)
+            fixed_time = __calc_fixed_time(break_times, fixed_times[0])
             over_time = __calc_over_time(break_times, fixed_times[0], holiday, record)
         total_time = __calc_total_time(break_times, record.date, record.start_time, record.end_time)
         midnight_time = __calc_midnight_time(break_times, record)
