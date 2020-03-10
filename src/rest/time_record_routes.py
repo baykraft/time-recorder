@@ -110,11 +110,7 @@ def update(user: str, year: int, month: int, date: int):
             filtered.note = note
 
             # 祝日を取得
-            holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
-            if 200 == holiday_response.status_code:
-                japanese_holidays = holiday_response.json()
-            else:
-                japanese_holidays = {}
+            japanese_holidays = __get_holidays(year)
 
             date = datetime.date(year=filtered.date.year, month=filtered.date.month, day=filtered.date.day)
             day = date.weekday()  # 0:月～6:日
@@ -178,11 +174,7 @@ def create(user: str, year: int, month: int, date: int):
             session.flush()
 
             # 祝日を取得
-            holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
-            if 200 == holiday_response.status_code:
-                japanese_holidays = holiday_response.json()
-            else:
-                japanese_holidays = {}
+            japanese_holidays = __get_holidays(year)
 
             date = datetime.date(year=record.date.year, month=record.date.month, day=record.date.day)
             day = date.weekday()  # 0:月～6:日
@@ -225,11 +217,7 @@ def records(user: str, year: int, month: int):
         ).all()
 
         # 祝日を取得
-        holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
-        if 200 == holiday_response.status_code:
-            japanese_holidays = holiday_response.json()
-        else:
-            japanese_holidays = {}
+        japanese_holidays = __get_holidays(year)
 
         results = []
         date = datetime.date(year, month, 1)
@@ -279,11 +267,7 @@ def download(user: str, year: int, month: int):
         ).all()
 
         # 祝日を取得
-        holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
-        if 200 == holiday_response.status_code:
-            japanese_holidays = holiday_response.json()
-        else:
-            japanese_holidays = {}
+        japanese_holidays = __get_holidays(year)
 
         # 日付毎の勤怠記録を生成
         results = []
@@ -362,11 +346,7 @@ def summary(user: str, year: int, month: int):
         ).all()
 
         # 祝日を取得
-        holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
-        if 200 == holiday_response.status_code:
-            japanese_holidays = holiday_response.json()
-        else:
-            japanese_holidays = {}
+        japanese_holidays = __get_holidays(year)
 
         results = []
         date = datetime.date(year, month, 1)
@@ -399,6 +379,8 @@ def summary(user: str, year: int, month: int):
         # 法休深夜残業時間算出
         statutory_midnight_time = __sum_times(list(
             map(lambda r: r['midnight_time'], filter(lambda r: r['statutory_holiday'] and r['kind'] == 50, results))))
+        # 控除時間算出
+        deduction_time = __sum_times(list(map(lambda r: r['deduction_time'], results)))
 
         return jsonify({
             'ok': True,
@@ -407,7 +389,8 @@ def summary(user: str, year: int, month: int):
             'over_time': over_time,
             'midnight_time': midnight_time,
             'statutory_time': statutory_time,
-            'statutory_midnight_time': statutory_midnight_time
+            'statutory_midnight_time': statutory_midnight_time,
+            'deduction_time': deduction_time
         }), 200
     except Exception as e:
         session.rollback()
@@ -416,6 +399,22 @@ def summary(user: str, year: int, month: int):
         if session.is_active:
             session.commit()
         session.close()
+
+
+def __get_holidays(year: int) -> dict:
+    """
+    祝日リストを取得します。
+
+    :param year: 年
+    :type year: int
+    :return: 祝日リスト
+    :rtype: dict
+    """
+    holiday_response = requests.get(f'https://holidays-jp.github.io/api/v1/{year}/date.json')
+    if 200 == holiday_response.status_code:
+        return holiday_response.json()
+    else:
+        return {}
 
 
 def __sum_times(times: List[str]) -> str:
@@ -545,6 +544,8 @@ def __calc_over_time(break_times: List[BreakTime], fixed_time: FixedTime, holida
     ft2 = ft1 if holiday and record.kind == 50 else ft2
     if ft2 < dt2:
         return __calc_total_time(break_times, record.date, ft2.time(), dt2.time())
+    else:
+        return '0:00'
 
 
 def __calc_midnight_time(break_times: List[BreakTime], record: TimeRecord) -> str:
@@ -563,6 +564,38 @@ def __calc_midnight_time(break_times: List[BreakTime], record: TimeRecord) -> st
 
     if midnight < dt2:
         return __calc_total_time(break_times, record.date, midnight.time(), dt2.time())
+    else:
+        return '0:00'
+
+
+def __calc_deduction_time(fixed_time: str, total_time: str, over_time: str, midnight_time: str, kind: int) -> str:
+    """
+    控除時間を算出します。
+
+    :param fixed_time: 所定時間
+    :type fixed_time: str
+    :param total_time: 合計時間
+    :type total_time: str
+    :param over_time: 残業時間
+    :type over_time: str
+    :param midnight_time: 深夜残業時間
+    :type midnight_time: str
+    :param kind: 勤休
+    :type kind: int
+    :return: 控除時間
+    :rtype: str
+    """
+    fixed_minute: int = __to_minute(fixed_time)
+    total_minute: int = __to_minute(total_time)
+    over_minute: int = __to_minute(over_time)
+    midnight_minute: int = __to_minute(midnight_time)
+    # 勤休が指定されている場合は控除時間は無し
+    if 0 == kind and total_minute - (over_minute + midnight_minute) < fixed_minute:
+        deduction_minute = fixed_minute - (total_minute - (over_minute + midnight_minute))
+        h, m = divmod(deduction_minute, 60)  # 分を60で割った答えがh(時), 余りがm(分)
+        return f'{int(h)}:{str(int(m)).zfill(2)}'
+    else:
+        return '0:00'
 
 
 def __time_record_to_result(
@@ -593,10 +626,12 @@ def __time_record_to_result(
     :return: 勤怠記録情報を表す辞書型オブジェクト
     :rtype: dict
     """
-    fixed_time = None
-    total_time = None
-    over_time = None
-    midnight_time = None
+    fixed_time = '0:00'       # 所定時間
+    total_time = '0:00'       # 合計時間
+    over_time = '0:00'        # 残業時間
+    midnight_time = '0:00'    # 深夜残業時間
+    deduction_time = '0:00'   # 控除時間
+
     if record and record.start_time and record.end_time:
 
         # 指定された客先の休憩時間リストを取得
@@ -620,6 +655,7 @@ def __time_record_to_result(
             over_time = __calc_over_time(break_times, fixed_times[0], holiday, record)
         total_time = __calc_total_time(break_times, record.date, record.start_time, record.end_time)
         midnight_time = __calc_midnight_time(break_times, record)
+        deduction_time = __calc_deduction_time(fixed_time, total_time, over_time, midnight_time, record.kind)
 
     return {
         'time_record_id': record.time_record_id if record else 0,
@@ -637,5 +673,21 @@ def __time_record_to_result(
         'total_time': total_time,
         'over_time': over_time,
         'midnight_time': midnight_time,
+        'deduction_time': deduction_time,
         'note': record.note if record else holiday_note
     }
+
+
+def __to_minute(time: str) -> int:
+    """
+    時間文字列を分に変換します。
+
+    :param time: 時間文字列
+    :type time: str
+    :return: 分
+    :rtype: int
+    """
+    if time:
+        return int(time.split(':')[0]) * 60 + int(time.split(':')[1])
+    else:
+        return 0
