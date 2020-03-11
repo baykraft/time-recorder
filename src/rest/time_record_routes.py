@@ -235,6 +235,10 @@ def download(user: str, year: int, month: int):
 
         # 客先別稼働時間出力
         row_index = 5
+        sum_fixed_days = 0              # 所定日数合計
+        sum_total_fixed_times = '0:00'  # 総所定時間合計
+        sum_actual_days = 0             # 実働日数合計
+        sum_actual_times = '0:00'       # 実働時間合計
         for ft in fixed_times:
             break_times: List[BreakTime] = session.query(BreakTime).filter(
                 BreakTime.user == user,
@@ -245,6 +249,7 @@ def download(user: str, year: int, month: int):
 
             # 所定日数
             fixed_days = len(list(filter(lambda r: not r['holiday'] and ft.customer == r['customer'], results)))
+            sum_fixed_days += fixed_days
             # 所定時間, 総所定時間算出
             fixed_time = __calc_fixed_time(break_times, ft)
             fixed_hour = int(fixed_time.split(':')[0]) * fixed_days
@@ -253,6 +258,7 @@ def download(user: str, year: int, month: int):
             fixed_hour += h
             fixed_minute = m
             sum_fixed_time = f'{fixed_hour}:{str(fixed_minute).zfill(2)}'
+            sum_total_fixed_times = __sum_times([sum_total_fixed_times, sum_fixed_time])
             # 実働日数
             actual_list = list(filter(lambda r: ft.customer == r['customer'], results))
             actual_days = len(actual_list)
@@ -264,9 +270,11 @@ def download(user: str, year: int, month: int):
                     actual_days -= 1
                 elif kind in half_day:
                     actual_days -= 0.5
+            sum_actual_days += actual_days
             # 実働時間算出
             actual_time = __sum_times(list(
                 map(lambda r: r['total_time'], filter(lambda r: ft.customer == r['customer'], results))))
+            sum_actual_times = __sum_times([sum_actual_times, actual_time])
             ws.cell(row=row_index, column=2).value = ft.customer
             ws.cell(row=row_index, column=3).value = fixed_time
             ws.cell(row=row_index, column=4).value = fixed_days
@@ -274,6 +282,12 @@ def download(user: str, year: int, month: int):
             ws.cell(row=row_index, column=6).value = actual_days
             ws.cell(row=row_index, column=7).value = actual_time
             row_index += 1
+
+        # 客先合計を出力
+        ws.cell(row=9, column=4).value = sum_fixed_days
+        ws.cell(row=9, column=5).value = sum_total_fixed_times
+        ws.cell(row=9, column=6).value = sum_actual_days
+        ws.cell(row=9, column=7).value = sum_actual_times
 
         # 残業時間算出
         over_time = __sum_times(list(
@@ -294,6 +308,8 @@ def download(user: str, year: int, month: int):
         ws.cell(row=9, column=11).value = midnight_time
         ws.cell(row=9, column=12).value = statutory_time
         ws.cell(row=9, column=13).value = statutory_midnight_time
+        ws.cell(row=9, column=14).value = __sum_times([
+            over_time, midnight_time, statutory_time, statutory_midnight_time])
         ws.cell(row=9, column=15).value = deduction_time
 
         row_index = 12
