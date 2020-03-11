@@ -368,35 +368,65 @@ def summary(user: str, year: int, month: int):
     try:
         results = __get_time_records(session, user, year, month)
 
-        # 所定時間算出
-        fixed_time = __sum_times(list(map(lambda r: r['fixed_time'], filter(lambda r: not r['holiday'], results))))
-        # 実働時間算出
-        actual_time = __sum_times(list(map(lambda r: r['total_time'], results)))
-        # 残業時間算出
-        over_time = __sum_times(list(
-            map(lambda r: r['over_time'], filter(lambda r: not r['statutory_holiday'], results))))
-        # 深夜残業時間算出
-        midnight_time = __sum_times(list(
-            map(lambda r: r['midnight_time'], filter(lambda r: not r['statutory_holiday'], results))))
-        # 法休残業時間算出
-        statutory_time = __sum_times(list(
-            map(lambda r: r['over_time'], filter(lambda r: r['statutory_holiday'] and r['kind'] == 50, results))))
-        # 法休深夜残業時間算出
-        statutory_midnight_time = __sum_times(list(
-            map(lambda r: r['midnight_time'], filter(lambda r: r['statutory_holiday'] and r['kind'] == 50, results))))
-        # 控除時間算出
-        deduction_time = __sum_times(list(map(lambda r: r['deduction_time'], results)))
+        # 所定時間を取得
+        fixed_times: List[FixedTime] = session.query(FixedTime).filter(
+            FixedTime.user == user,
+            FixedTime.year == year,
+            FixedTime.month == month
+        ).all()
 
-        return jsonify({
-            'ok': True,
-            'fixed_time': fixed_time,
-            'actual_time': actual_time,
-            'over_time': over_time,
-            'midnight_time': midnight_time,
-            'statutory_time': statutory_time,
-            'statutory_midnight_time': statutory_midnight_time,
-            'deduction_time': deduction_time
-        }), 200
+        records = []
+        for ft in fixed_times:
+            break_times: List[BreakTime] = session.query(BreakTime).filter(
+                BreakTime.user == user,
+                BreakTime.year == year,
+                BreakTime.month == month,
+                BreakTime.customer == ft.customer
+            ).all()
+
+            # 客先指定で絞り込む
+            filtered = list(filter(lambda r: r['customer'] == ft.customer, results))
+
+            # 所定日数
+            fixed_days = len(list(filter(lambda r: not r['holiday'], filtered)))
+            # 総所定時間算出
+            fixed_time = __calc_fixed_time(break_times, ft)
+            fixed_hour = int(fixed_time.split(':')[0]) * fixed_days
+            fixed_minute = int(fixed_time.split(':')[1]) * fixed_days
+            h, m = divmod(fixed_minute, 60)
+            fixed_hour += h
+            fixed_minute = m
+            sum_fixed_time = f'{fixed_hour}:{str(fixed_minute).zfill(2)}'
+            # 実働時間算出
+            actual_time = __sum_times(list(map(lambda r: r['total_time'], filtered)))
+            # 残業時間算出
+            over_time = __sum_times(list(
+                map(lambda r: r['over_time'], filter(lambda r: not r['statutory_holiday'], filtered))))
+            # 深夜残業時間算出
+            midnight_time = __sum_times(list(
+                map(lambda r: r['midnight_time'], filter(lambda r: not r['statutory_holiday'], filtered))))
+            # 法休残業時間算出
+            statutory_time = __sum_times(list(
+                map(lambda r: r['over_time'], filter(lambda r: r['statutory_holiday'] and r['kind'] == 50, filtered))))
+            # 法休深夜残業時間算出
+            statutory_midnight_time = __sum_times(list(
+                map(lambda r: r['midnight_time'],
+                    filter(lambda r: r['statutory_holiday'] and r['kind'] == 50, filtered))))
+            # 控除時間算出
+            deduction_time = __sum_times(list(map(lambda r: r['deduction_time'], filtered)))
+
+            records.append({
+                'customer': ft.customer,
+                'fixed_time': sum_fixed_time,
+                'actual_time': actual_time,
+                'over_time': over_time,
+                'midnight_time': midnight_time,
+                'statutory_time': statutory_time,
+                'statutory_midnight_time': statutory_midnight_time,
+                'deduction_time': deduction_time
+            })
+
+        return jsonify({'ok': True, 'records': records}), 200
     except Exception as e:
         session.rollback()
         logger.error(e, exc_info=True)
