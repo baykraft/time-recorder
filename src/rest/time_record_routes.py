@@ -4,7 +4,7 @@ import json
 import datetime
 import logging
 from flask_cors import CORS
-from plugins.models import Session, TimeRecord, BreakTime, FixedTime
+from plugins.models import Session, TimeRecord, BreakTime, FixedTime, User
 from typing import List
 from openpyxl import load_workbook
 from openpyxl.writer.excel import save_virtual_workbook
@@ -221,7 +221,14 @@ def download(user: str, year: int, month: int):
     try:
         wb = load_workbook('resources/template.xlsx')
         ws = wb['勤怠']
-        ws.cell(row=2, column=2).value = f'{year}年{month}月'
+        ws.cell(row=4, column=14).value = f'{year}年{month}月'
+
+        # ユーザ情報取得
+        u: User = session.query(User).filter(
+            User.user == user
+        ).first()
+        if u:
+            ws.cell(row=6, column=13).value = u.real_name
 
         # 日付毎の勤怠記録を生成
         results = __get_time_records(session, user, year, month)
@@ -234,7 +241,7 @@ def download(user: str, year: int, month: int):
         ).all()
 
         # 客先別稼働時間出力
-        row_index = 5
+        row_index = 11
         sum_fixed_days = 0              # 所定日数合計
         sum_total_fixed_times = '0:00'  # 総所定時間合計
         sum_actual_days = 0             # 実働日数合計
@@ -284,10 +291,26 @@ def download(user: str, year: int, month: int):
             row_index += 1
 
         # 客先合計を出力
-        ws.cell(row=9, column=4).value = sum_fixed_days
-        ws.cell(row=9, column=5).value = sum_total_fixed_times
-        ws.cell(row=9, column=6).value = sum_actual_days
-        ws.cell(row=9, column=7).value = sum_actual_times
+        ws.cell(row=15, column=4).value = sum_fixed_days
+        ws.cell(row=15, column=5).value = sum_total_fixed_times
+        ws.cell(row=15, column=6).value = sum_actual_days
+        ws.cell(row=15, column=7).value = sum_actual_times
+
+        day_off = len(list(filter(lambda r: r['kind'] == 10, results)))
+        day_off += len(list(filter(lambda r: r['kind'] == 11 or r['kind'] == 12, results))) / 2
+        sp_day_off = len(list(filter(lambda r: r['kind'] == 30, results)))
+        sp_day_off += len(list(filter(lambda r: r['kind'] == 31 or r['kind'] == 32, results))) / 2
+        sb_day_off = len(list(filter(lambda r: r['kind'] == 40, results)))
+        sb_day_off += len(list(filter(lambda r: r['kind'] == 41 or r['kind'] == 42, results))) / 2
+        ab_day_off = len(list(filter(lambda r: r['kind'] == 20, results)))
+        ab_day_off += len(list(filter(lambda r: r['kind'] == 21 or r['kind'] == 22, results))) / 2
+        holiday_work = len(list(filter(lambda r: r['kind'] == 50, results)))
+
+        ws.cell(row=13, column=10).value = day_off
+        ws.cell(row=13, column=11).value = sp_day_off
+        ws.cell(row=13, column=12).value = sb_day_off
+        ws.cell(row=13, column=13).value = ab_day_off
+        ws.cell(row=13, column=14).value = holiday_work
 
         # 残業時間算出
         over_time = __sum_times(list(
@@ -304,15 +327,15 @@ def download(user: str, year: int, month: int):
         # 控除時間算出
         deduction_time = __sum_times(list(map(lambda r: r['deduction_time'], results)))
 
-        ws.cell(row=9, column=10).value = over_time
-        ws.cell(row=9, column=11).value = midnight_time
-        ws.cell(row=9, column=12).value = statutory_time
-        ws.cell(row=9, column=13).value = statutory_midnight_time
-        ws.cell(row=9, column=14).value = __sum_times([
+        ws.cell(row=15, column=10).value = over_time
+        ws.cell(row=15, column=11).value = midnight_time
+        ws.cell(row=15, column=12).value = statutory_time
+        ws.cell(row=15, column=13).value = statutory_midnight_time
+        ws.cell(row=15, column=14).value = __sum_times([
             over_time, midnight_time, statutory_time, statutory_midnight_time])
-        ws.cell(row=9, column=15).value = deduction_time
+        ws.cell(row=15, column=15).value = deduction_time
 
-        row_index = 12
+        row_index = 18
         day_of_week = '月', '火', '水', '木', '金', '土', '日'
         kind = {
             '0': '',
