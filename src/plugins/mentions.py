@@ -196,12 +196,20 @@ def off(message: Message, *something):
         * やすむ
         * 休暇
 
-    メッセージには日時を指定することが可能です。日時を指定しない場合は現在日時で記録されます。
+    メッセージには日付を指定することが可能です。日付を指定しない場合は現在日付で記録されます。
+    「有休」として記録されます。
 
-        休み 2020/1/29 17:30
-        休み 1/29 17:30
+        休み 2020/1/29
         休み 1/29
         休み
+
+    メッセージには午前および午後を指定することも可能です。
+    午前が指定された場合は「有休(AM)」、午後が指定された場合は「有休(PM)」として記録されます。
+
+        午前休み
+        午後休み
+        am休み
+        pm休み
 
     また、シングルクォートで文字列を括ることでメモ情報を記録することができます。
 
@@ -219,6 +227,16 @@ def off(message: Message, *something):
     date_time = dateutils.normalize_datetime(text)
     date = date_time.date()
     user = message.body['user']
+
+    # 勤休を判定
+    # テキストに午前が含まれている場合は「有休（AM)」、
+    # 午後が含まれている場合は「有休（PM)」、
+    # それ以外は「有休」とする。
+    kind = 10
+    if dateutils.is_am(text):
+        kind = 11
+    elif dateutils.is_pm(text):
+        kind = 12
 
     note = text
     pattern = re.compile('"(.+)"')
@@ -245,7 +263,7 @@ def off(message: Message, *something):
         if filtered:
             filtered.start_time = None
             filtered.end_time = None
-            filtered.kind = 10  # 有休
+            filtered.kind = kind
             filtered.note = note
         else:
             record: TimeRecord = TimeRecord(user, date)
@@ -256,12 +274,17 @@ def off(message: Message, *something):
                 record.customer = latest.customer
             record.start_time = None
             record.end_time = None
-            record.kind = 10  # 有休
+            record.kind = kind
             record.note = note
             session.add(record)
 
         now = "{0:%Y/%m/%d}".format(date_time)
-        message.reply(f'{now} を休暇として登録しました')
+        if 11 == kind:
+            message.reply(f'{now} を有休(AM)として登録しました')
+        elif 12 == kind:
+            message.reply(f'{now} を有休(PM)として登録しました')
+        else:
+            message.reply(f'{now} を有休として登録しました')
 
     except Exception as e:
         session.rollback()

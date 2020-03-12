@@ -4,6 +4,32 @@ from plugins import stringutils
 import re
 
 
+def is_am(value: str) -> bool:
+    """
+    文字列中に午前を表す文字が含まれているか判定します。
+
+    :param value: 文字列
+    :type value: str
+    :return: True: 含まれる, False: 含まれない
+    :rtype: bool
+    """
+    value = stringutils.translate2han(value)
+    return re.search('(午前|am)', value) is not None
+
+
+def is_pm(value: str) -> bool:
+    """
+    文字列中に午後を表す文字が含まれているか判定します。
+
+    :param value: 文字列
+    :type value: str
+    :return: True: 含まれる, False: 含まれない
+    :rtype: bool
+    """
+    value = stringutils.translate2han(value)
+    return re.search('(午後|pm)', value) is not None
+
+
 def parse_date(value: str) -> datetime.date:
     """
     文字列から日付を取得します。
@@ -29,7 +55,7 @@ def parse_date(value: str) -> datetime.date:
     matches = pattern.search(value)
     if matches:
         groups = matches.group(2, 3, 4)
-        year = int(now.year if (groups[0] is None) else groups[0])
+        year = int(now.year or groups[0])
         month = int(groups[1])
         day = int(groups[2])
         return datetime.date(year=year, month=month, day=day)

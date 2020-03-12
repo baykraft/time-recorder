@@ -46,3 +46,13 @@ class TestDateUtils(TestCase):
         self.assertEqual(datetime.datetime(expected_year, 10, 20, 12, 30), dateutils.normalize_datetime('10/20 12:30'))
         self.assertEqual(datetime.datetime(2020, 10, 20, expected_hour, expected_minute),
                          dateutils.normalize_datetime('2020/10/20'))
+
+    def test_is_am(self):
+        self.assertTrue(dateutils.is_am('am休み'))
+        self.assertTrue(dateutils.is_am('午前休み'))
+        self.assertFalse(dateutils.is_am('pm休み'))
+
+    def test_is_pm(self):
+        self.assertTrue(dateutils.is_pm('pm休み'))
+        self.assertTrue(dateutils.is_pm('午後休み'))
+        self.assertFalse(dateutils.is_pm('am休み'))
