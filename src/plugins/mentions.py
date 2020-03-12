@@ -261,8 +261,10 @@ def off(message: Message, *something):
             TimeRecord.user == user,
             TimeRecord.date == date).first()
         if filtered:
-            filtered.start_time = None
-            filtered.end_time = None
+            # 終日休暇の場合のみ時間をクリアする。
+            if 10 == kind:
+                filtered.start_time = None
+                filtered.end_time = None
             filtered.kind = kind
             filtered.note = note
         else:
@@ -272,8 +274,6 @@ def off(message: Message, *something):
             ).order_by(desc(TimeRecord.date)).first()
             if latest:
                 record.customer = latest.customer
-            record.start_time = None
-            record.end_time = None
             record.kind = kind
             record.note = note
             session.add(record)
