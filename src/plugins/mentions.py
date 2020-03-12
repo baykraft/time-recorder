@@ -280,11 +280,11 @@ def off(message: Message, *something):
 
         now = "{0:%Y/%m/%d}".format(date_time)
         if 11 == kind:
-            message.reply(f'{now} を有休(AM)として登録しました')
+            message.reply(f'{now} を有休(AM)として登録しました\n休暇理由:\n> {note}')
         elif 12 == kind:
-            message.reply(f'{now} を有休(PM)として登録しました')
+            message.reply(f'{now} を有休(PM)として登録しました\n休暇理由:\n> {note}')
         else:
-            message.reply(f'{now} を有休として登録しました')
+            message.reply(f'{now} を有休として登録しました\n休暇理由:\n> {note}')
 
     except Exception as e:
         session.rollback()
