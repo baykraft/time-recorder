@@ -36,6 +36,12 @@ def sign_in(message: Message, *something):
         おはようございます 1/29
         おはようございます
 
+
+    また、シングルクォートで文字列を括ることでメモ情報を記録することができます。
+
+        おはようございます 1/30 "ここがメモとして記録される"
+        おはようございます "ここがメモとして記録される"
+
     :param message: メッセージオブジェクト
     :type message: Message
     :param something: メッセージタプル
@@ -43,10 +49,12 @@ def sign_in(message: Message, *something):
     :return: なし
     :rtype: None
     """
-    date_time = dateutils.normalize_datetime(message.body['text'])
+    text = message.body['text']
+    date_time = dateutils.normalize_datetime(text)
     date = date_time.date()
     time = date_time.time()
     user = message.body['user']
+    note = __note(text, '')
 
     session = Session()
     try:
@@ -65,6 +73,8 @@ def sign_in(message: Message, *something):
             TimeRecord.date == date).first()
         if filtered:
             filtered.start_time = time
+            if note:
+                filtered.note = note
         else:
             record: TimeRecord = TimeRecord(user, date)
             latest: TimeRecord = session.query(TimeRecord).filter(
@@ -73,6 +83,8 @@ def sign_in(message: Message, *something):
             if latest:
                 record.customer = latest.customer
             record.start_time = time
+            if note:
+                record.note = note
             session.add(record)
 
         now = "{0:%Y/%m/%d %H:%M}".format(date_time)
@@ -133,6 +145,11 @@ def sign_out(message: Message, *something):
         お疲れ様でした 1/29
         お疲れ様でした
 
+    また、シングルクォートで文字列を括ることでメモ情報を記録することができます。
+
+        お疲れ様でした 1/30 "ここがメモとして記録される"
+        お疲れ様でした "ここがメモとして記録される"
+
     :param message: メッセージオブジェクト
     :type message: Message
     :param something: メッセージタプル
@@ -140,10 +157,12 @@ def sign_out(message: Message, *something):
     :return: なし
     :rtype: None
     """
-    date_time = dateutils.normalize_datetime(message.body['text'])
+    text = message.body['text']
+    date_time = dateutils.normalize_datetime(text)
     date = date_time.date()
     time = date_time.time()
     user = message.body['user']
+    note = __note(text, '')
 
     session = Session()
     try:
@@ -162,6 +181,8 @@ def sign_out(message: Message, *something):
             TimeRecord.date == date).first()
         if filtered:
             filtered.end_time = time
+            if note:
+                filtered.note = note
         else:
             record: TimeRecord = TimeRecord(user, date)
             latest: TimeRecord = session.query(TimeRecord).filter(
@@ -170,6 +191,8 @@ def sign_out(message: Message, *something):
             if latest:
                 record.customer = latest.customer
             record.end_time = time
+            if note:
+                record.note = note
             session.add(record)
 
         now = "{0:%Y/%m/%d %H:%M}".format(date_time)
@@ -227,6 +250,7 @@ def off(message: Message, *something):
     date_time = dateutils.normalize_datetime(text)
     date = date_time.date()
     user = message.body['user']
+    note = __note(text, text)
 
     # 勤休を判定
     # テキストに午前が含まれている場合は「有休（AM)」、
@@ -237,13 +261,6 @@ def off(message: Message, *something):
         kind = 11
     elif dateutils.is_pm(text):
         kind = 12
-
-    note = text
-    pattern = re.compile('"(.+)"')
-    matches = pattern.search(stringutils.translate2han(text))
-    if matches:
-        groups = matches.groups()
-        note = groups[0]
 
     session = Session()
     try:
@@ -280,11 +297,11 @@ def off(message: Message, *something):
 
         now = "{0:%Y/%m/%d}".format(date_time)
         if 11 == kind:
-            message.reply(f'{now} を有休(AM)として登録しました\n休暇理由:\n> {note}')
+            message.reply(f'{now} を有休(AM)として登録しました\n備考:\n> {note}')
         elif 12 == kind:
-            message.reply(f'{now} を有休(PM)として登録しました\n休暇理由:\n> {note}')
+            message.reply(f'{now} を有休(PM)として登録しました\n備考:\n> {note}')
         else:
-            message.reply(f'{now} を有休として登録しました\n休暇理由:\n> {note}')
+            message.reply(f'{now} を有休として登録しました\n備考:\n> {note}')
 
     except Exception as e:
         session.rollback()
@@ -293,3 +310,23 @@ def off(message: Message, *something):
         if session.is_active:
             session.commit()
         session.close()
+
+
+def __note(text: str, default: str) -> str:
+    """
+    文字列中から備考となる文字列を抽出します。
+    抽出対象が無い場合はデフォルト文字列を返します。
+
+    :param text: 対象文字列
+    :type text: str
+    :param default: デフォルト文字列
+    :type default: str
+    :return: 備考文字列
+    :rtype: str
+    """
+    pattern = re.compile('"(.+)"')
+    matches = pattern.search(stringutils.translate2han(text))
+    if matches:
+        groups = matches.groups()
+        return groups[0]
+    return default
