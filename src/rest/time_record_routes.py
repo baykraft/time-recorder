@@ -8,7 +8,6 @@ from plugins.models import Session, TimeRecord, BreakTime, FixedTime, User
 from typing import List
 from openpyxl import load_workbook
 from openpyxl.writer.excel import save_virtual_workbook
-import os
 
 module_api = Blueprint('time_records', __name__)
 CORS(module_api)
@@ -220,7 +219,6 @@ def download(user: str, year: int, month: int):
     """
     session = Session()
     try:
-        logger.info(os.getcwd())
         wb = load_workbook('resources/template.xlsx')
         ws = wb['勤怠']
         ws.cell(row=4, column=14).value = f'{year}年{month}月'
