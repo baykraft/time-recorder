@@ -8,6 +8,7 @@ from plugins.models import Session, TimeRecord, BreakTime, FixedTime, User
 from typing import List
 from openpyxl import load_workbook
 from openpyxl.writer.excel import save_virtual_workbook
+from dateutil.relativedelta import relativedelta
 
 module_api = Blueprint('time_records', __name__)
 CORS(module_api)
@@ -478,7 +479,7 @@ def __get_time_records(session, user: str, year: int, month: int) -> list:
     time_records: List[TimeRecord] = session.query(TimeRecord).filter(
         TimeRecord.user == user,
         TimeRecord.date >= datetime.date(year, month, 1),
-        TimeRecord.date < datetime.date(year, month + 1, 1)
+        TimeRecord.date < datetime.date(year, month, 1) + relativedelta(months=1)
     ).all()
 
     # 日付毎の勤怠記録を生成

@@ -12,6 +12,7 @@ Jinja2==2.10.3
 MarkupSafe==1.1.1
 openpyxl==3.0.3
 psycopg2-binary==2.8.4
+python-dateutil==2.8.1
 python-dotenv==0.10.5
 pytz==2019.3
 requests==2.22.0
