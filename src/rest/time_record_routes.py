@@ -239,23 +239,44 @@ def download(user: str, year: int, month: int):
             TransportationExpenses.user == user,
             TransportationExpenses.date >= datetime.date(year, month, 1),
             TransportationExpenses.date < datetime.date(year, month, 1) + relativedelta(months=1)
-        ).all()
+        ).order_by(TransportationExpenses.date)
 
         row_index = 11
         classifications = {'10': '通勤', '11': '出張'}
         breakdowns = {'10': '定期', '11': '切符', '12': 'ICカード', '13': '現金'}
         billing_addresses = {'1': '社内', '2': '社外'}
+        ex_commuting = 0
+        ex_travel = 0
         for ex in expenses:
             ws_ex.cell(row=row_index, column=2).value = ex.date.day
             ws_ex.cell(row=row_index, column=3).value = ex.customer
             ws_ex.cell(row=row_index, column=5).value = classifications[str(ex.classification)]
             ws_ex.cell(row=row_index, column=6).value = breakdowns[str(ex.breakdown)]
-            ws_ex.cell(row=row_index, column=7).value = '{:,}'.format(ex.expenses)
+            ws_ex.cell(row=row_index, column=7).number_format = '#,##0'
+            ws_ex.cell(row=row_index, column=7).value = ex.expenses
             ws_ex.cell(row=row_index, column=8).value = billing_addresses[str(ex.billing_address)]
             ws_ex.cell(row=row_index, column=9).value = ex.transportation
             ws_ex.cell(row=row_index, column=12).value = ex.departure
             ws_ex.cell(row=row_index, column=14).value = ex.arrival
             row_index += 1
+            # 通勤費用を集計
+            if 10 == ex.classification:
+                ex_commuting += ex.expenses
+            # 出張費用を集計
+            elif 11 == ex.classification:
+                ex_travel += ex.expenses
+            if 49 == row_index:
+                break
+
+        ws.cell(row=11, column=10).number_format = '#,##0'
+        ws.cell(row=11, column=10).value = ex_commuting
+        ws.cell(row=11, column=11).number_format = '#,##0'
+        ws.cell(row=11, column=11).value = ex_travel
+        ws.cell(row=11, column=12).value = 0
+        ws.cell(row=11, column=13).value = 0
+        ws.cell(row=11, column=14).value = 0
+        ws.cell(row=11, column=15).number_format = '#,##0'
+        ws.cell(row=11, column=15).value = ex_commuting + ex_travel
 
         # 日付毎の勤怠記録を生成
         results = __get_time_records(session, user, year, month)
