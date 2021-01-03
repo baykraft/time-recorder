@@ -170,9 +170,10 @@ def update(user: str, tran_ex_id: int):
     """
     session = Session()
     try:
-        year: int = jsonutils.strip_to_none(request.json, 'year')
-        month: int = jsonutils.strip_to_none(request.json, 'month')
-        day: int = jsonutils.strip_to_none(request.json, 'day')
+        logger.warning(request.json)
+        year = jsonutils.strip_to_none(request.json, 'year')
+        month = jsonutils.strip_to_none(request.json, 'month')
+        day = jsonutils.strip_to_none(request.json, 'day')
         customer = jsonutils.strip_to_none(request.json, 'customer')
         classification = jsonutils.strip_to_none(request.json, 'classification')
         breakdown = jsonutils.strip_to_none(request.json, 'breakdown')
@@ -189,7 +190,7 @@ def update(user: str, tran_ex_id: int):
 
         if record:
             record.user = user
-            record.date = datetime.date(year=year, month=month, day=day)
+            record.date = datetime.date(year=int(year), month=int(month), day=int(day))
             record.customer = customer
             record.classification = classification
             record.breakdown = breakdown
