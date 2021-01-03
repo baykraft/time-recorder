@@ -58,7 +58,7 @@ def records(user: str, year: int, month: int):
             TransportationExpenses.user == user,
             TransportationExpenses.date >= datetime.date(year, month, 1),
             TransportationExpenses.date < datetime.date(year, month, 1) + relativedelta(months=1)
-        ).all()
+        ).order_by(TransportationExpenses.date)
         results = list(map(lambda r: __transportation_expenses_to_result(r), ex_records))
         return jsonify({'ok': True, 'records': results}), 200
     except Exception as e:
