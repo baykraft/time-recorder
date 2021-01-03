@@ -173,7 +173,7 @@ def update(user: str, tran_ex_id: int):
         year = jsonutils.strip_to_none(request.json, 'year')
         month = jsonutils.strip_to_none(request.json, 'month')
         day = jsonutils.strip_to_none(request.json, 'day')
-        logger.info(f'year:{year},month:{month},day:{day}')
+        logger.warning(f'year:{year},month:{month},day:{day}')
         customer = jsonutils.strip_to_none(request.json, 'customer')
         classification = jsonutils.strip_to_none(request.json, 'classification')
         breakdown = jsonutils.strip_to_none(request.json, 'breakdown')
