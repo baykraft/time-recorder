@@ -4,7 +4,7 @@ import json
 import datetime
 import logging
 from flask_cors import CORS
-from plugins.models import Session, TimeRecord, BreakTime, FixedTime, User
+from plugins.models import Session, TimeRecord, BreakTime, FixedTime, User, TransportationExpenses
 from typing import List
 from openpyxl import load_workbook
 from openpyxl.writer.excel import save_virtual_workbook
@@ -222,7 +222,9 @@ def download(user: str, year: int, month: int):
     try:
         wb = load_workbook('resources/template.xlsx')
         ws = wb['勤怠']
-        ws.cell(row=4, column=14).value = f'{year}年{month}月'
+        ws_ex = wb['経費']
+        ws.cell(row=4, column=14).value = f'{year}年{month:02}月'
+        ws_ex.cell(row=4, column=14).value = f'{year}年{month:02}月'
 
         # ユーザ情報取得
         u: User = session.query(User).filter(
@@ -230,6 +232,30 @@ def download(user: str, year: int, month: int):
         ).first()
         if u:
             ws.cell(row=6, column=13).value = u.real_name
+            ws_ex.cell(row=6, column=13).value = u.real_name
+
+        # 交通費を取得
+        expenses: List[TransportationExpenses] = session.query(TransportationExpenses).filter(
+            TransportationExpenses.user == user,
+            TransportationExpenses.date >= datetime.date(year, month, 1),
+            TransportationExpenses.date < datetime.date(year, month, 1) + relativedelta(months=1)
+        ).all()
+
+        row_index = 11
+        classifications = {'10': '通勤', '11': '出張'}
+        breakdowns = {'10': '定期', '11': '切符', '12': 'ICカード', '13': '現金'}
+        billing_addresses = {'1': '社内', '2': '社外'}
+        for ex in expenses:
+            ws_ex.cell(row=row_index, column=2).value = ex.date.day
+            ws_ex.cell(row=row_index, column=3).value = ex.customer
+            ws_ex.cell(row=row_index, column=5).value = classifications[str(ex.classification)]
+            ws_ex.cell(row=row_index, column=6).value = breakdowns[str(ex.breakdown)]
+            ws_ex.cell(row=row_index, column=7).value = '{:,}'.format(ex.expenses)
+            ws_ex.cell(row=row_index, column=8).value = billing_addresses[str(ex.billing_address)]
+            ws_ex.cell(row=row_index, column=9).value = ex.transportation
+            ws_ex.cell(row=row_index, column=12).value = ex.departure
+            ws_ex.cell(row=row_index, column=14).value = ex.arrival
+            row_index += 1
 
         # 日付毎の勤怠記録を生成
         results = __get_time_records(session, user, year, month)

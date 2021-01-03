@@ -43,7 +43,7 @@ class TimeRecord(Base):
     start_time: datetime.time = sa.Column('start_time', sa.TIME, nullable=True)
     end_time: datetime.time = sa.Column('end_time', sa.TIME, nullable=True)
     note: str = sa.Column('note', sa.String, nullable=True)
-    kind: int = sa.Column('kind', sa.Integer, nullable=False, default=0)
+    kind: int = sa.Column('kind', sa.Integer, nullable=False, default=0, server_default="0")
     customer: str = sa.Column('customer', sa.String, nullable=True)
 
     def __init__(self, user: str, date: datetime.date):
@@ -118,6 +118,60 @@ class FixedTime(Base):
     def __repr__(self):
         return '<FixedTime({}, {}, {}, {}, {}, {}, {})>'.format(
             self.fixed_time_id, self.user, self.year, self.month, self.customer, self.start_time, self.end_time)
+
+
+class TransportationExpenses(Base):
+    """
+    交通費
+    """
+    __tablename__ = 'transportation_expenses'
+    tran_ex_id: int = sa.Column('tran_ex_id', sa.Integer, primary_key=True, autoincrement=True)
+    user: str = sa.Column('user', sa.String(9), nullable=False)
+    date: datetime.date = sa.Column('date', sa.DATE, nullable=False)
+    customer: str = sa.Column('customer', sa.String, nullable=False)
+    classification: int = sa.Column('classification', sa.Integer, nullable=False, default=10, server_default="10")
+    breakdown: int = sa.Column('breakdown', sa.Integer, nullable=False, default=10, server_default="10")
+    billing_address: int = sa.Column('billing_address', sa.Integer, nullable=False, default=1, server_default="1")
+    expenses: int = sa.Column('expenses', sa.Integer, nullable=False)
+    transportation: str = sa.Column('transportation', sa.String, nullable=False)
+    departure: str = sa.Column('departure', sa.String, nullable=False)
+    arrival: str = sa.Column('arrival', sa.String, nullable=False)
+
+    def __init__(self,
+                 user: str,
+                 date: datetime.date,
+                 customer: str,
+                 classification: int,
+                 breakdown: int,
+                 billing_address: int,
+                 expenses: int,
+                 transportation: str,
+                 departure: str,
+                 arrival: str):
+        self.user = user
+        self.date = date
+        self.customer = customer
+        self.classification = classification
+        self.breakdown = breakdown
+        self.billing_address = billing_address
+        self.expenses = expenses
+        self.transportation = transportation
+        self.departure = departure
+        self.arrival = arrival
+
+    def __repr__(self):
+        return '<TransportationExpenses({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})>'.format(
+            self.expenses_id,
+            self.user,
+            self.date,
+            self.customer,
+            self.classification,
+            self.breakdown,
+            self.billing_address,
+            self.expenses,
+            self.transportation,
+            self.departure,
+            self.arrival)
 
 
 class User(Base):

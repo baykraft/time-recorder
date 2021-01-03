@@ -5,12 +5,14 @@ from rest import time_record_routes
 from rest import break_time_routes
 from rest import fixed_time_routes
 from rest import doc_routes
+from rest import expenses_routes
 
 app = Flask(__name__, static_folder='./templates/static', template_folder='./templates')
 app.register_blueprint(time_record_routes.module_api, url_prefix='/rest/time_records')
 app.register_blueprint(break_time_routes.module_api, url_prefix='/rest/break_times')
 app.register_blueprint(fixed_time_routes.module_api, url_prefix='/rest/fixed_times')
 app.register_blueprint(doc_routes.module_api, url_prefix='/rest/docs')
+app.register_blueprint(expenses_routes.module_api, url_prefix='/rest/expenses')
 CORS(app)
 
 
