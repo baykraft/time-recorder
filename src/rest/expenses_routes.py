@@ -170,7 +170,6 @@ def update(user: str, tran_ex_id: int):
     """
     session = Session()
     try:
-        logger.warning(request.json)
         year = jsonutils.strip_to_none(request.json, 'year')
         month = jsonutils.strip_to_none(request.json, 'month')
         day = jsonutils.strip_to_none(request.json, 'day')
